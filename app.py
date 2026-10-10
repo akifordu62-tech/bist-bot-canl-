@@ -21,8 +21,32 @@ from strategy import run_strategy
 from chart import create_chart
 from scanner import fetch_data
 from backtest import backtest_strategy
-from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS, get_bist_symbols, get_index_membership
+from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS, get_bist_symbols
 from telegram_notifier import notify_signal, send_telegram_message, test_telegram_connection
+
+# bist_symbols.py henüz güncellenmemiş olsa bile uygulamanın çökmesini önleyen yedek tanımlama
+try:
+    from bist_symbols import get_index_membership
+except ImportError:
+    def get_index_membership(symbol: str) -> str:
+        clean = symbol.replace(".IS", "").strip().upper()
+        b30 = {s.replace(".IS", "").strip().upper() for s in BIST_30_SYMBOLS}
+        b100 = {s.replace(".IS", "").strip().upper() for s in BIST_100_SYMBOLS}
+        if clean in b30:
+            return "BIST 100 (BIST 30 Hissesi) 🌟"
+        elif clean in b100:
+            return "BIST 100 Hissesi 🏛️"
+        else:
+            return "BIST Tüm (Yan Tahta) 🏢"
+
+def safe_notify_signal(symbol: str, signal_type: str, price: float, rsi: float, date_str: str, **kwargs):
+    """
+    telegram_notifier.py eski versiyonda olsa bile hata vermeden çalışır.
+    """
+    try:
+        return notify_signal(symbol, signal_type, price, rsi, date_str, **kwargs)
+    except TypeError:
+        return notify_signal(symbol, signal_type, price, rsi, date_str)
 
 # Sayfa Konfigürasyonu (Mobilde menünün ekranı kaplamaması için 'collapsed' başlatılır)
 st.set_page_config(
@@ -290,7 +314,7 @@ elif app_mode == "🔍 Canlı Piyasa Taraması (Scanner)":
                     "Tarih": last_date
                 })
                 if send_tg_check:
-                    notify_signal(
+                    safe_notify_signal(
                         symbol=sym,
                         signal_type="BUY",
                         price=close_price,
@@ -322,7 +346,7 @@ elif app_mode == "🔍 Canlı Piyasa Taraması (Scanner)":
                     "Tarih": last_date
                 })
                 if send_tg_check:
-                    notify_signal(
+                    safe_notify_signal(
                         symbol=sym,
                         signal_type="SELL",
                         price=close_price,
