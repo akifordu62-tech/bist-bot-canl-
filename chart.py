@@ -158,21 +158,9 @@ def create_chart(df: pd.DataFrame, symbol: str = "HISSE", save_html: bool = True
         template="plotly_dark",
         paper_bgcolor="#131722",
         plot_bgcolor="#1e222d",
-        title=dict(
-            text=f"<b>{symbol}</b> | Net Hacim & RSI Çıkış Stratejisi V5.1",
-            font=dict(size=14, color="#e0e0e0"),
-            x=0.02
-        ),
+        showlegend=False,  # Mobilde başlıklarla çakışmayı önlemek için sadeleştirildi
         xaxis_rangeslider_visible=False,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-            font=dict(size=9)
-        ),
-        margin=dict(l=15, r=15, t=40, b=25),
+        margin=dict(l=10, r=10, t=25, b=20),
         height=height,
         hovermode='x unified'
     )

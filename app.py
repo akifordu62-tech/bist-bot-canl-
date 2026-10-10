@@ -64,12 +64,12 @@ CHART_CONFIG = {
     'doubleClick': 'reset'
 }
 
-# Özel Stil / CSS (Mobil Uyumlu & Responsive)
+# Özel Stil / CSS (Mobil Uyumlu, Yüksek Kontrastlı & Responsive)
 st.markdown("""
 <style>
-    /* Sayfa kenar boşlukları */
+    /* Sayfa üst boşluğu: Streamlit'in sabit üst çubuğunun (>> Fork vb.) altına indirir */
     .block-container {
-        padding-top: 1.2rem !important;
+        padding-top: 5rem !important;
         padding-bottom: 2rem !important;
         padding-left: 0.8rem !important;
         padding-right: 0.8rem !important;
@@ -78,7 +78,7 @@ st.markdown("""
     
     /* Mobil Cihazlar (Ekran genişliği <= 768px) */
     @media (max-width: 768px) {
-        /* 5-6 sütunlu metriklerin ezilmesini önle, 2'şerli kartlar olarak yerleştir */
+        /* Metrik kartlarını mobilde 2'şerli sırala */
         div[data-testid="column"] {
             flex: 1 1 calc(50% - 10px) !important;
             min-width: calc(50% - 10px) !important;
@@ -88,59 +88,93 @@ st.markdown("""
             flex-wrap: wrap !important;
             gap: 8px !important;
         }
-        .stMetric {
-            background-color: #1e222d !important;
-            padding: 8px 10px !important;
-            border-radius: 8px !important;
-            border: 1px solid #2a2e39 !important;
-        }
-        .stMetric label {
-            font-size: 0.72rem !important;
-            white-space: normal !important;
-        }
-        .stMetric div[data-testid="stMetricValue"] {
-            font-size: 1.05rem !important;
-        }
-        /* Dokunmatik butonlar */
+        /* Dokunmatik buton yükseklikleri */
         .stButton>button {
             min-height: 44px !important;
             font-size: 0.95rem !important;
         }
     }
 
-    /* Masaüstü Metrik Kartı */
-    @media (min-width: 769px) {
-        .stMetric {
-            background-color: #1e222d !important;
-            padding: 12px 14px !important;
-            border-radius: 8px !important;
-            border: 1px solid #2a2e39 !important;
-        }
+    /* SİYAH METRİK KUTULARI - HER TEMADA %100 NET OKUNUR BEYAZ YAZI */
+    div[data-testid="stMetric"] {
+        background-color: #1e222d !important;
+        padding: 12px 14px !important;
+        border-radius: 10px !important;
+        border: 1px solid #363c4e !important;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25) !important;
+    }
+    
+    /* Etiket Başlığı (Son Kapanış, RSI vb.) - Açık Gri */
+    div[data-testid="stMetric"] label,
+    div[data-testid="stMetric"] label *,
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"],
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"] * {
+        color: #9aa0a6 !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
     }
 
-    /* Üst Menü Navigasyon Butonları Tasarımı */
+    /* Metrik Değeri (287.50 TL, 45.8 vb.) - Bembeyaz, Kalın ve Net */
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"],
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] *,
+    div[data-testid="stMetric"] [data-testid="stMetricValue"],
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] * {
+        color: #ffffff !important;
+        font-size: 1.3rem !important;
+        font-weight: 700 !important;
+    }
+
+    /* Delta / Durum Göstergesi (Pozisyonda AL vb.) - Parlak Yeşil */
+    div[data-testid="stMetric"] div[data-testid="stMetricDelta"],
+    div[data-testid="stMetric"] div[data-testid="stMetricDelta"] * {
+        color: #00e676 !important;
+        font-weight: 600 !important;
+    }
+
+    /* Üst Segmented Control / Dokunmatik Menü Butonları */
+    div[data-testid="stSegmentedControl"] {
+        width: 100% !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 1.4rem !important;
+    }
+    div[data-testid="stSegmentedControl"] button {
+        flex: 1 1 0px !important;
+        min-height: 44px !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* Radio fallback menü stili */
     div[data-testid="stRadio"] > div[role="radiogroup"] {
-        background-color: #1e222d;
-        border-radius: 10px;
-        padding: 5px;
-        border: 1px solid #2a2e39;
-        margin-bottom: 15px;
-        display: flex;
-        justify-content: space-around;
+        background-color: #1e222d !important;
+        border-radius: 12px !important;
+        padding: 6px !important;
+        border: 1px solid #363c4e !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 1.4rem !important;
+        display: flex !important;
+        justify-content: space-around !important;
     }
     div[data-testid="stRadio"] label {
         padding: 6px 10px !important;
-        border-radius: 6px !important;
-        cursor: pointer;
+        border-radius: 8px !important;
+        cursor: pointer !important;
+    }
+    div[data-testid="stRadio"] label,
+    div[data-testid="stRadio"] label p,
+    div[data-testid="stRadio"] label span {
+        color: #ffffff !important;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Üst Navigasyon Menüsü (Mobilde tek dokunuşla sekmeler arası geçiş)
-NAV_OPTIONS = ["📈 Grafik & Sinyal", "🔍 Canlı Tarama", "🧪 Backtest", "⚙️ Ayarlar"]
+# Üst Navigasyon Menüsü (Kısa etiketler mobilde tek satıra sığar)
+NAV_OPTIONS = ["📈 Grafik", "🔍 Tarama", "🧪 Backtest", "⚙️ Ayarlar"]
 NAV_MAP = {
-    "📈 Grafik & Sinyal": "📈 Hisse Grafiği & Sinyaller",
-    "🔍 Canlı Tarama": "🔍 Canlı Piyasa Taraması (Scanner)",
+    "📈 Grafik": "📈 Hisse Grafiği & Sinyaller",
+    "🔍 Tarama": "🔍 Canlı Piyasa Taraması (Scanner)",
     "🧪 Backtest": "🧪 Backtest & Performans",
     "⚙️ Ayarlar": "⚙️ Ayarlar & Telegram"
 }
@@ -149,13 +183,23 @@ NAV_MAP = {
 if "current_nav" not in st.session_state:
     st.session_state.current_nav = NAV_OPTIONS[0]
 
-selected_nav = st.radio(
-    "Menü:",
-    NAV_OPTIONS,
-    index=NAV_OPTIONS.index(st.session_state.current_nav),
-    horizontal=True,
-    label_visibility="collapsed"
-)
+# Streamlit 1.38+ segmented control (daha modern dokunmatik butonlar) veya radio
+if hasattr(st, "segmented_control"):
+    selected_nav = st.segmented_control(
+        "Menü",
+        NAV_OPTIONS,
+        default=st.session_state.current_nav if st.session_state.current_nav in NAV_OPTIONS else NAV_OPTIONS[0],
+        label_visibility="collapsed"
+    ) or st.session_state.current_nav
+else:
+    nav_idx = NAV_OPTIONS.index(st.session_state.current_nav) if st.session_state.current_nav in NAV_OPTIONS else 0
+    selected_nav = st.radio(
+        "Menü:",
+        NAV_OPTIONS,
+        index=nav_idx,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 st.session_state.current_nav = selected_nav
 app_mode = NAV_MAP[selected_nav]
 
