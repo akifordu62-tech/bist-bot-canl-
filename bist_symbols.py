@@ -80,3 +80,19 @@ def get_bist_symbols(index_name: str = "BIST100", force_refresh: bool = False) -
 
 BIST_100_SYMBOLS = get_bist_symbols("BIST100")
 BIST_30_SYMBOLS = get_bist_symbols("BIST30")
+
+def get_index_membership(symbol: str) -> str:
+    """
+    Hissenin BIST 100 veya BIST 30 endeksine ait olup olmadığını kontrol eder.
+    """
+    clean = symbol.replace(".IS", "").strip().upper()
+    b30 = {s.replace(".IS", "").strip().upper() for s in BIST_30_SYMBOLS}
+    b100 = {s.replace(".IS", "").strip().upper() for s in BIST_100_SYMBOLS}
+
+    if clean in b30:
+        return "BIST 100 (BIST 30 Hissesi) 🌟"
+    elif clean in b100:
+        return "BIST 100 Hissesi 🏛️"
+    else:
+        return "BIST Tüm (Yan Tahta) 🏢"
+

@@ -6,12 +6,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 
-def create_chart(df: pd.DataFrame, symbol: str = "HISSE", save_html: bool = True, output_dir: str = "charts") -> go.Figure:
+def create_chart(df: pd.DataFrame, symbol: str = "HISSE", save_html: bool = True, output_dir: str = "charts", height: int = 650) -> go.Figure:
     """
     Pine Script görselleştirmesini birebir Plotly interaktif grafiğine dönüştürür:
     - Panel 1: Mum grafiği, Çıkış Destek Seviyesi (Lowest Low), AL / SAT / RSI Uyarı işaretleri
     - Panel 2: Net Hacim barları ve Hacim Hareketli Ortalaması (SMA)
     - Panel 3: RSI (14) çizgisi ve 70 / 30 seviyeleri
+    Mobil ve masaüstü ekranlar için optimize edilmiştir.
     """
     # Sadece tarih filtresi içindeki veya son 1-2 yıllık veriyi gösterelim
     plot_df = df.copy()
@@ -152,14 +153,14 @@ def create_chart(df: pd.DataFrame, symbol: str = "HISSE", save_html: bool = True
         # Aşırı satım çizgisi (30)
         fig.add_hline(y=30, line_dash="dash", line_color="#26a69a", line_width=1, row=3, col=1)
 
-    # Genel Görünüm ve TradingView Koyu Tema Ayarları
+    # Genel Görünüm ve TradingView Koyu Tema Ayarları (Mobil ve Masaüstü Uyumlu)
     fig.update_layout(
         template="plotly_dark",
         paper_bgcolor="#131722",
         plot_bgcolor="#1e222d",
         title=dict(
-            text=f"<b>{symbol}</b> | Net Hacim Akışı & RSI Gecikmeli Çıkış Stratejisi V5.1",
-            font=dict(size=18, color="#e0e0e0"),
+            text=f"<b>{symbol}</b> | Net Hacim & RSI Çıkış Stratejisi V5.1",
+            font=dict(size=14, color="#e0e0e0"),
             x=0.02
         ),
         xaxis_rangeslider_visible=False,
@@ -169,10 +170,10 @@ def create_chart(df: pd.DataFrame, symbol: str = "HISSE", save_html: bool = True
             y=1.02,
             xanchor="right",
             x=1,
-            font=dict(size=10)
+            font=dict(size=9)
         ),
-        margin=dict(l=40, r=40, t=60, b=30),
-        height=900,
+        margin=dict(l=15, r=15, t=40, b=25),
+        height=height,
         hovermode='x unified'
     )
 

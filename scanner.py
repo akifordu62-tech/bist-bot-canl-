@@ -6,6 +6,8 @@ interaktif grafiklerini hazırlar ve Telegram'a bildirim gönderir.
 import time
 import os
 import sys
+import json
+import datetime
 import pandas as pd
 import yfinance as yf
 
@@ -17,8 +19,30 @@ except Exception:
     pass
 from config import StrategyConfig, TELEGRAM_CONFIG
 from strategy import run_strategy
-from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS
+from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS, get_index_membership
 from telegram_notifier import notify_signal, send_telegram_message
+from backtest import backtest_strategy
+
+HISTORY_FILE = os.path.join(os.path.dirname(__file__), ".daily_sent_signals.json")
+
+def _load_sent_history() -> dict:
+    today_str = datetime.date.today().isoformat()
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("date") == today_str:
+                    return data
+        except Exception:
+            pass
+    return {"date": today_str, "signals": [], "no_signal_sent": False}
+
+def _save_sent_history(data: dict):
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def safe_create_chart(df, symbol, save_html=True):
     try:
@@ -64,6 +88,8 @@ def scan_symbols(symbols_list: list = None, send_telegram: bool = True, save_cha
         "rsi_warning": []
     }
 
+    sent_history = _load_sent_history()
+
     print("\n" + "=" * 65)
     print(f"  🔍 BIST GÜNLÜK TARAMA BAŞLATILDI ({len(symbols_list)} Hisse)")
     print(f"  📅 Strateji Başlangıç Tarihi: {config.start_date_str}")
@@ -89,33 +115,95 @@ def scan_symbols(symbols_list: list = None, send_telegram: bool = True, save_cha
 
         # 1. AL Sinyali Kontrolü
         if last_row['Long_Signal']:
+            # Sinyal veren hissenin backtest metriklerini ve endeks durumunu hesapla
+            bt_res = backtest_strategy(df_strat)
+            win_rate = bt_res.get('win_rate', 0.0)
+            avg_win = bt_res.get('avg_win_pct', 0.0)
+            win_trades = bt_res.get('win_trades', 0)
+            total_trades = bt_res.get('total_trades', 0)
+            profit_factor = bt_res.get('profit_factor', 0.0)
+            index_name = get_index_membership(sym)
+
             results["buy"].append({
                 "symbol": sym,
                 "date": last_date,
                 "price": close_price,
-                "rsi": rsi_val
+                "rsi": rsi_val,
+                "win_rate": win_rate,
+                "avg_win": avg_win,
+                "index_name": index_name
             })
-            print(f"\n  🟢 [AL SİNYALİ]: {sym} | Fiyat: {close_price:.2f} TL | RSI: {rsi_val:.1f}")
+            print(f"\n  🟢 [AL SİNYALİ]: {sym} ({index_name}) | Fiyat: {close_price:.2f} TL | RSI: {rsi_val:.1f} | Kazanma: %{win_rate:.1f} | Ort. Kâr: %{avg_win:.1f}")
             
             if save_charts:
                 safe_create_chart(df_strat, symbol=sym, save_html=True)
             if send_telegram:
-                notify_signal(sym, "BUY", close_price, rsi_val, last_date)
+                sig_key = f"{sym}_BUY_{last_date}"
+                if sig_key not in sent_history.get("signals", []):
+                    ok = notify_signal(
+                        symbol=sym,
+                        signal_type="BUY",
+                        price=close_price,
+                        rsi=rsi_val,
+                        date_str=last_date,
+                        win_rate=win_rate,
+                        avg_win_pct=avg_win,
+                        index_name=index_name,
+                        win_trades=win_trades,
+                        total_trades=total_trades,
+                        profit_factor=profit_factor
+                    )
+                    if ok:
+                        sent_history.setdefault("signals", []).append(sig_key)
+                        _save_sent_history(sent_history)
+                else:
+                    print(f"  ℹ️ [{sym}]: Bugün AL sinyali zaten Telegram'a iletilmişti, tekrar gönderilmedi.")
 
         # 2. SAT Sinyali Kontrolü
         elif last_row['Exit_Signal']:
+            # Sinyal veren hissenin backtest metriklerini ve endeks durumunu hesapla
+            bt_res = backtest_strategy(df_strat)
+            win_rate = bt_res.get('win_rate', 0.0)
+            avg_win = bt_res.get('avg_win_pct', 0.0)
+            win_trades = bt_res.get('win_trades', 0)
+            total_trades = bt_res.get('total_trades', 0)
+            profit_factor = bt_res.get('profit_factor', 0.0)
+            index_name = get_index_membership(sym)
+
             results["sell"].append({
                 "symbol": sym,
                 "date": last_date,
                 "price": close_price,
-                "rsi": rsi_val
+                "rsi": rsi_val,
+                "win_rate": win_rate,
+                "avg_win": avg_win,
+                "index_name": index_name
             })
-            print(f"\n  🔴 [SAT SİNYALİ]: {sym} | Fiyat: {close_price:.2f} TL | RSI: {rsi_val:.1f}")
+            print(f"\n  🔴 [SAT SİNYALİ]: {sym} ({index_name}) | Fiyat: {close_price:.2f} TL | RSI: {rsi_val:.1f} | Kazanma: %{win_rate:.1f} | Ort. Kâr: %{avg_win:.1f}")
             
             if save_charts:
                 safe_create_chart(df_strat, symbol=sym, save_html=True)
             if send_telegram:
-                notify_signal(sym, "SELL", close_price, rsi_val, last_date)
+                sig_key = f"{sym}_SELL_{last_date}"
+                if sig_key not in sent_history.get("signals", []):
+                    ok = notify_signal(
+                        symbol=sym,
+                        signal_type="SELL",
+                        price=close_price,
+                        rsi=rsi_val,
+                        date_str=last_date,
+                        win_rate=win_rate,
+                        avg_win_pct=avg_win,
+                        index_name=index_name,
+                        win_trades=win_trades,
+                        total_trades=total_trades,
+                        profit_factor=profit_factor
+                    )
+                    if ok:
+                        sent_history.setdefault("signals", []).append(sig_key)
+                        _save_sent_history(sent_history)
+                else:
+                    print(f"  ℹ️ [{sym}]: Bugün SAT sinyali zaten Telegram'a iletilmişti, tekrar gönderilmedi.")
 
         # 3. RSI Uyarısı Kontrolü
         elif last_row['RSI_Warning']:
@@ -132,23 +220,27 @@ def scan_symbols(symbols_list: list = None, send_telegram: bool = True, save_cha
     print("=" * 65)
     print(f"  🟢 AL Veren Hisseler ({len(results['buy'])}):")
     for item in results['buy']:
-        print(f"     - {item['symbol']:<10} Fiyat: {item['price']:>7.2f} TL | RSI: {item['rsi']:.1f}")
+        print(f"     - {item['symbol']:<10} {item.get('index_name',''):<25} Fiyat: {item['price']:>7.2f} TL | RSI: {item['rsi']:.1f} | Win: %{item.get('win_rate',0):.1f}")
 
     print(f"\n  🔴 SAT Veren Hisseler ({len(results['sell'])}):")
     for item in results['sell']:
-        print(f"     - {item['symbol']:<10} Fiyat: {item['price']:>7.2f} TL | RSI: {item['rsi']:.1f}")
+        print(f"     - {item['symbol']:<10} {item.get('index_name',''):<25} Fiyat: {item['price']:>7.2f} TL | RSI: {item['rsi']:.1f} | Win: %{item.get('win_rate',0):.1f}")
 
     print(f"\n  ⚠️ RSI Uyarısı Veren Hisseler ({len(results['rsi_warning'])}):")
     for item in results['rsi_warning']:
         print(f"     - {item['symbol']:<10} Fiyat: {item['price']:>7.2f} TL | RSI: {item['rsi']:.1f}")
     print("=" * 65 + "\n")
 
-    # Sinyal çıkmadığında kullanıcının botun çalıştığını bilmesi için sade Telegram bilgilendirmesi
+    # Sinyal çıkmadığında kullanıcının botun çalıştığını bilmesi için GÜNDE EN FAZLA 1 DEFA Telegram bilgilendirmesi
     if send_telegram and len(results["buy"]) == 0 and len(results["sell"]) == 0:
-        import datetime
-        now_str = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
-        no_signal_msg = f"⚪ [PYTHON BOT] BIST 100 Taraması Tamamlandı: Bugün yeni sinyal yok. ({now_str})"
-        send_telegram_message(no_signal_msg)
+        if not sent_history.get("no_signal_sent", False):
+            now_str = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
+            no_signal_msg = f"⚪ [PYTHON BOT] BIST 100 Taraması Tamamlandı: Bugün yeni sinyal yok. ({now_str})"
+            send_telegram_message(no_signal_msg)
+            sent_history["no_signal_sent"] = True
+            _save_sent_history(sent_history)
+        else:
+            print("[Telegram Bilgi]: 'Bugün yeni sinyal yok' mesajı bugün zaten 1 kez gönderildi, spam engellendi.")
 
     return results
 

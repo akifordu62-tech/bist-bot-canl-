@@ -21,50 +21,123 @@ from strategy import run_strategy
 from chart import create_chart
 from scanner import fetch_data
 from backtest import backtest_strategy
-from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS, get_bist_symbols
+from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS, get_bist_symbols, get_index_membership
 from telegram_notifier import notify_signal, send_telegram_message, test_telegram_connection
 
-# Sayfa Konfigürasyonu
+# Sayfa Konfigürasyonu (Mobilde menünün ekranı kaplamaması için 'collapsed' başlatılır)
 st.set_page_config(
     page_title="BIST Sinyal & Analiz Paneli",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Özel Stil / CSS
+# Plotly Dokunmatik Ekran ve Mobil Scroll Kilidi Çözümü
+CHART_CONFIG = {
+    'scrollZoom': False,
+    'displayModeBar': False,
+    'responsive': True,
+    'doubleClick': 'reset'
+}
+
+# Özel Stil / CSS (Mobil Uyumlu & Responsive)
 st.markdown("""
 <style>
-    .metric-card {
+    /* Sayfa kenar boşlukları */
+    .block-container {
+        padding-top: 1.2rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
+        max-width: 100% !important;
+    }
+    
+    /* Mobil Cihazlar (Ekran genişliği <= 768px) */
+    @media (max-width: 768px) {
+        /* 5-6 sütunlu metriklerin ezilmesini önle, 2'şerli kartlar olarak yerleştir */
+        div[data-testid="column"] {
+            flex: 1 1 calc(50% - 10px) !important;
+            min-width: calc(50% - 10px) !important;
+            margin-bottom: 8px !important;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+        }
+        .stMetric {
+            background-color: #1e222d !important;
+            padding: 8px 10px !important;
+            border-radius: 8px !important;
+            border: 1px solid #2a2e39 !important;
+        }
+        .stMetric label {
+            font-size: 0.72rem !important;
+            white-space: normal !important;
+        }
+        .stMetric div[data-testid="stMetricValue"] {
+            font-size: 1.05rem !important;
+        }
+        /* Dokunmatik butonlar */
+        .stButton>button {
+            min-height: 44px !important;
+            font-size: 0.95rem !important;
+        }
+    }
+
+    /* Masaüstü Metrik Kartı */
+    @media (min-width: 769px) {
+        .stMetric {
+            background-color: #1e222d !important;
+            padding: 12px 14px !important;
+            border-radius: 8px !important;
+            border: 1px solid #2a2e39 !important;
+        }
+    }
+
+    /* Üst Menü Navigasyon Butonları Tasarımı */
+    div[data-testid="stRadio"] > div[role="radiogroup"] {
         background-color: #1e222d;
-        border-radius: 8px;
-        padding: 15px;
-        border-left: 4px solid #26a69a;
-        margin-bottom: 10px;
+        border-radius: 10px;
+        padding: 5px;
+        border: 1px solid #2a2e39;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-around;
     }
-    .buy-badge {
-        background-color: rgba(38, 166, 154, 0.2);
-        color: #26a69a;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: bold;
-    }
-    .sell-badge {
-        background-color: rgba(239, 83, 80, 0.2);
-        color: #ef5350;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: bold;
+    div[data-testid="stRadio"] label {
+        padding: 6px 10px !important;
+        border-radius: 6px !important;
+        cursor: pointer;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Yan Menü (Sidebar)
-st.sidebar.title("📊 BIST Bot Kontrol")
-app_mode = st.sidebar.radio(
-    "Görünüm Seçiniz:",
-    ["📈 Hisse Grafiği & Sinyaller", "🔍 Canlı Piyasa Taraması (Scanner)", "🧪 Backtest & Performans", "⚙️ Ayarlar & Telegram"]
+# Üst Navigasyon Menüsü (Mobilde tek dokunuşla sekmeler arası geçiş)
+NAV_OPTIONS = ["📈 Grafik & Sinyal", "🔍 Canlı Tarama", "🧪 Backtest", "⚙️ Ayarlar"]
+NAV_MAP = {
+    "📈 Grafik & Sinyal": "📈 Hisse Grafiği & Sinyaller",
+    "🔍 Canlı Tarama": "🔍 Canlı Piyasa Taraması (Scanner)",
+    "🧪 Backtest": "🧪 Backtest & Performans",
+    "⚙️ Ayarlar": "⚙️ Ayarlar & Telegram"
+}
+
+# Session state senkronizasyonu
+if "current_nav" not in st.session_state:
+    st.session_state.current_nav = NAV_OPTIONS[0]
+
+selected_nav = st.radio(
+    "Menü:",
+    NAV_OPTIONS,
+    index=NAV_OPTIONS.index(st.session_state.current_nav),
+    horizontal=True,
+    label_visibility="collapsed"
 )
+st.session_state.current_nav = selected_nav
+app_mode = NAV_MAP[selected_nav]
+
+# Yan Menü (Sidebar) - Ekstra ayarlar ve parametreler için
+st.sidebar.title("📊 BIST Bot Kontrol")
+st.sidebar.caption(f"Aktif Sayfa: **{selected_nav}**")
 
 # Strateji Parametreleri (Sidebar'dan dinamik ayarlanabilir)
 st.sidebar.markdown("---")
@@ -147,9 +220,9 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
         elif last_row['RSI_Warning']:
             st.warning(f"⚠️ **RSI MOMENTUM UYARISI!** RSI 70 seviyesini aşağı kesti, pivot kırılımı bekleniyor.")
 
-        # Plotly Grafiğini Çiz
+        # Plotly Grafiğini Çiz (Dokunmatik Scroll Korumalı)
         fig = create_chart(df_strat, symbol=selected_symbol, save_html=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config=CHART_CONFIG)
     else:
         st.error(f"{selected_symbol} için veri alınamadı. Sembolün doğruluğunu kontrol edin.")
 
@@ -197,19 +270,80 @@ elif app_mode == "🔍 Canlı Piyasa Taraması (Scanner)":
             rsi_val = float(last_row['RSI'])
 
             clean_name = sym.replace(".IS", "")
+            idx_badge = get_index_membership(sym)
 
             if last_row['Long_Signal']:
-                buy_list.append({"Hisse": clean_name, "Fiyat (TL)": f"{close_price:.2f}", "RSI": f"{rsi_val:.1f}", "Tarih": last_date})
+                bt_res = backtest_strategy(df_strat)
+                wr = bt_res.get('win_rate', 0.0)
+                aw = bt_res.get('avg_win_pct', 0.0)
+                wt = bt_res.get('win_trades', 0)
+                tt = bt_res.get('total_trades', 0)
+                pf = bt_res.get('profit_factor', 0.0)
+
+                buy_list.append({
+                    "Hisse": clean_name,
+                    "Endeks": idx_badge,
+                    "Fiyat (TL)": f"{close_price:.2f}",
+                    "RSI": f"{rsi_val:.1f}",
+                    "Kazanma %": f"%{wr:.1f}",
+                    "Ort. Kâr": f"%{aw:.1f}",
+                    "Tarih": last_date
+                })
                 if send_tg_check:
-                    notify_signal(sym, "BUY", close_price, rsi_val, last_date)
+                    notify_signal(
+                        symbol=sym,
+                        signal_type="BUY",
+                        price=close_price,
+                        rsi=rsi_val,
+                        date_str=last_date,
+                        win_rate=wr,
+                        avg_win_pct=aw,
+                        index_name=idx_badge,
+                        win_trades=wt,
+                        total_trades=tt,
+                        profit_factor=pf
+                    )
 
             elif last_row['Exit_Signal']:
-                sell_list.append({"Hisse": clean_name, "Fiyat (TL)": f"{close_price:.2f}", "RSI": f"{rsi_val:.1f}", "Tarih": last_date})
+                bt_res = backtest_strategy(df_strat)
+                wr = bt_res.get('win_rate', 0.0)
+                aw = bt_res.get('avg_win_pct', 0.0)
+                wt = bt_res.get('win_trades', 0)
+                tt = bt_res.get('total_trades', 0)
+                pf = bt_res.get('profit_factor', 0.0)
+
+                sell_list.append({
+                    "Hisse": clean_name,
+                    "Endeks": idx_badge,
+                    "Fiyat (TL)": f"{close_price:.2f}",
+                    "RSI": f"{rsi_val:.1f}",
+                    "Kazanma %": f"%{wr:.1f}",
+                    "Ort. Kâr": f"%{aw:.1f}",
+                    "Tarih": last_date
+                })
                 if send_tg_check:
-                    notify_signal(sym, "SELL", close_price, rsi_val, last_date)
+                    notify_signal(
+                        symbol=sym,
+                        signal_type="SELL",
+                        price=close_price,
+                        rsi=rsi_val,
+                        date_str=last_date,
+                        win_rate=wr,
+                        avg_win_pct=aw,
+                        index_name=idx_badge,
+                        win_trades=wt,
+                        total_trades=tt,
+                        profit_factor=pf
+                    )
 
             elif last_row['RSI_Warning']:
-                warn_list.append({"Hisse": clean_name, "Fiyat (TL)": f"{close_price:.2f}", "RSI": f"{rsi_val:.1f}", "Tarih": last_date})
+                warn_list.append({
+                    "Hisse": clean_name,
+                    "Endeks": idx_badge,
+                    "Fiyat (TL)": f"{close_price:.2f}",
+                    "RSI": f"{rsi_val:.1f}",
+                    "Tarih": last_date
+                })
 
         status_text.success("✅ Tarama başarıyla tamamlandı!")
 
@@ -368,7 +502,7 @@ elif app_mode == "🧪 Backtest & Performans":
                             yaxis_title="İşlem Sayısı",
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                         )
-                        st.plotly_chart(hist_fig, use_container_width=True)
+                        st.plotly_chart(hist_fig, use_container_width=True, config=CHART_CONFIG)
 
                     with g_col2:
                         st.markdown("##### 🍩 İşlem Dağılımı")
@@ -394,7 +528,7 @@ elif app_mode == "🧪 Backtest & Performans":
                             margin=dict(l=20, r=20, t=30, b=20),
                             legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
                         )
-                        st.plotly_chart(donut_fig, use_container_width=True)
+                        st.plotly_chart(donut_fig, use_container_width=True, config=CHART_CONFIG)
 
                 # --- 2. SEKME: ZAMAN MODELLERİ ---
                 with ana_tab_zaman:
@@ -434,7 +568,7 @@ elif app_mode == "🧪 Backtest & Performans":
                             yaxis_title="Getiri (%)",
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                         )
-                        st.plotly_chart(y_fig, use_container_width=True)
+                        st.plotly_chart(y_fig, use_container_width=True, config=CHART_CONFIG)
                         
                         ydf_disp = ydf.copy()
                         ydf_disp['Strateji (%)'] = ydf_disp['Strateji (%)'].map(lambda x: f"%{x:+.1f}")
@@ -464,7 +598,7 @@ elif app_mode == "🧪 Backtest & Performans":
                     margin=dict(l=40, r=40, t=20, b=20),
                     yaxis_title="Portföy Değeri (TL)"
                 )
-                st.plotly_chart(equity_fig, use_container_width=True)
+                st.plotly_chart(equity_fig, use_container_width=True, config=CHART_CONFIG)
 
                 # İşlem Geçmişi Tablosu
                 st.subheader("📋 Gerçekleşen İşlemler Listesi")

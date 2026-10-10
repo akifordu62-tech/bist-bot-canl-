@@ -54,24 +54,60 @@ def send_telegram_message(text: str, token: str = None, chat_id: str = None) -> 
         print(f"[Telegram İletişim Hatası]: {e}")
         return False
 
-def notify_signal(symbol: str, signal_type: str, price: float, rsi: float, date_str: str, extra_info: str = "") -> bool:
+def notify_signal(symbol: str, signal_type: str, price: float, rsi: float, date_str: str, 
+                  win_rate: float = None, avg_win_pct: float = None, index_name: str = None, 
+                  win_trades: int = None, total_trades: int = None, profit_factor: float = None,
+                  extra_info: str = "") -> bool:
     """
-    Seçenek 2: Sade, net ve TradingView'den tamamen ayırt edilebilir tek satırlık/kısa format.
+    Kullanıcının isteğine göre zenginleştirilmiş sinyal bildirim formatı:
+    - Sinyal Türü & Hisse Kodu
+    - BIST 100 / BIST 30 Endeks Bilgisi
+    - Fiyat & RSI Değeri
+    - Kazanma Oranı (Win Rate) & İşlem Sayısı
+    - Ortalama Kâr & Kâr Faktörü
+    - Tarih
     """
     clean_sym = symbol.replace(".IS", "")
     
     if signal_type == "BUY":
-        message = f"🟢 [PYTHON BOT] #{clean_sym} Alış Sinyali ({price:.2f} TL | RSI: {rsi:.1f})"
+        icon = "🟢"
+        action = "ALIŞ SİNYALİ"
     elif signal_type == "SELL":
-        message = f"🔴 [PYTHON BOT] #{clean_sym} Satış Sinyali ({price:.2f} TL | RSI: {rsi:.1f})"
+        icon = "🔴"
+        action = "SATIŞ SİNYALİ"
     elif signal_type == "RSI_WARN":
-        message = f"⚠️ [PYTHON BOT] #{clean_sym} RSI Uyarısı ({price:.2f} TL | RSI: {rsi:.1f})"
+        icon = "⚠️"
+        action = "RSI UYARISI"
     else:
-        message = f"ℹ️ [PYTHON BOT] #{clean_sym} {signal_type} ({price:.2f} TL)"
+        icon = "ℹ️"
+        action = signal_type
+
+    msg_lines = [
+        f"{icon} <b>[PYTHON BOT] #{clean_sym} {action}</b>",
+        f"🏷️ <b>Endeks:</b> {index_name or 'BIST 100'}",
+        f"💵 <b>Fiyat:</b> {price:.2f} TL | <b>RSI:</b> {rsi:.1f}"
+    ]
+
+    # Kazanma Oranı ve İşlem Sayısı
+    if win_rate is not None and win_rate > 0:
+        trades_text = f" ({win_trades}/{total_trades} Başarılı İşlem)" if (win_trades is not None and total_trades is not None and total_trades > 0) else ""
+        msg_lines.append(f"🎯 <b>Kazanma Oranı:</b> %{win_rate:.1f}{trades_text}")
+
+    # Ortalama Kâr ve Kâr Faktörü
+    metrics_str = []
+    if avg_win_pct is not None and avg_win_pct > 0:
+        metrics_str.append(f"📈 <b>Ort. Kâr:</b> %{avg_win_pct:.1f}")
+    if profit_factor is not None and profit_factor > 0:
+        metrics_str.append(f"⚡ <b>Kâr Faktörü:</b> {profit_factor:.2f}")
+    if metrics_str:
+        msg_lines.append(" | ".join(metrics_str))
+
+    msg_lines.append(f"📅 <b>Tarih:</b> {date_str}")
 
     if extra_info:
-        message += f" - {extra_info}"
+        msg_lines.append(f"ℹ️ {extra_info}")
 
+    message = "\n".join(msg_lines)
     return send_telegram_message(message)
 
 def test_telegram_connection() -> bool:
