@@ -19,9 +19,29 @@ except Exception:
     pass
 from config import StrategyConfig, TELEGRAM_CONFIG
 from strategy import run_strategy
-from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS, get_index_membership
+from bist_symbols import BIST_100_SYMBOLS, BIST_30_SYMBOLS
+try:
+    from bist_symbols import get_index_membership
+except ImportError:
+    def get_index_membership(symbol: str) -> str:
+        clean = symbol.replace(".IS", "").strip().upper()
+        b30 = {s.replace(".IS", "").strip().upper() for s in BIST_30_SYMBOLS}
+        b100 = {s.replace(".IS", "").strip().upper() for s in BIST_100_SYMBOLS}
+        if clean in b30:
+            return "BIST 100 (BIST 30 Hissesi) 🌟"
+        elif clean in b100:
+            return "BIST 100 Hissesi 🏛️"
+        else:
+            return "BIST Tüm (Yan Tahta) 🏢"
+
 from telegram_notifier import notify_signal, send_telegram_message
 from backtest import backtest_strategy
+
+def safe_notify_signal(symbol: str, signal_type: str, price: float, rsi: float, date_str: str, **kwargs):
+    try:
+        return notify_signal(symbol, signal_type, price, rsi, date_str, **kwargs)
+    except TypeError:
+        return notify_signal(symbol, signal_type, price, rsi, date_str)
 
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), ".daily_sent_signals.json")
 
@@ -140,7 +160,7 @@ def scan_symbols(symbols_list: list = None, send_telegram: bool = True, save_cha
             if send_telegram:
                 sig_key = f"{sym}_BUY_{last_date}"
                 if sig_key not in sent_history.get("signals", []):
-                    ok = notify_signal(
+                    ok = safe_notify_signal(
                         symbol=sym,
                         signal_type="BUY",
                         price=close_price,
@@ -186,7 +206,7 @@ def scan_symbols(symbols_list: list = None, send_telegram: bool = True, save_cha
             if send_telegram:
                 sig_key = f"{sym}_SELL_{last_date}"
                 if sig_key not in sent_history.get("signals", []):
-                    ok = notify_signal(
+                    ok = safe_notify_signal(
                         symbol=sym,
                         signal_type="SELL",
                         price=close_price,
