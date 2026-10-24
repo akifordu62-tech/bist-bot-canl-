@@ -113,7 +113,11 @@ def run_strategy(df: pd.DataFrame, config: StrategyConfig = None) -> pd.DataFram
         positions[i] = current_position
 
     df['Position'] = positions
-    df['Long_Signal'] = long_entries
+    df['Trade_Entry'] = long_entries
+    # Pine Script plotshape(longCondition and in_date_range, title="AL Sinyali") ile 1:1 uyumlu:
+    # Hisse daha önceki bir AL sinyalinden dolayı pozisyonda (SAT gelmemiş) olsa bile
+    # yeni oluşan her AL sinyalini (yeşil üçgen) grafikte ve taramada gösterir.
+    df['Long_Signal'] = df['Raw_Long_Condition']
     df['Exit_Signal'] = exit_signals
     df['RSI_Alert_Active'] = False
 

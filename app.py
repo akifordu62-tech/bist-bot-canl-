@@ -267,6 +267,8 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
 
     if not df.empty:
         df_strat = run_strategy(df, current_config)
+        if 'Raw_Long_Condition' in df_strat.columns:
+            df_strat['Long_Signal'] = df_strat['Raw_Long_Condition']
         last_row = df_strat.iloc[-1]
         last_date = df_strat.index[-1].strftime("%d.%m.%Y")
         last_price = float(last_row['Close'])
@@ -331,6 +333,8 @@ elif app_mode == "🔍 Canlı Piyasa Taraması (Scanner)":
             df_strat = run_strategy(df, current_config)
             if df_strat.empty:
                 continue
+            if 'Raw_Long_Condition' in df_strat.columns:
+                df_strat['Long_Signal'] = df_strat['Raw_Long_Condition']
 
             last_row = df_strat.iloc[-1]
             last_date = df_strat.index[-1].strftime("%Y-%m-%d")
