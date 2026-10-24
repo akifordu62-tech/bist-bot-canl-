@@ -1,171 +1,231 @@
 """
-Plotly ile TradingView Benzeri İnteraktif Grafik Modülü
+Plotly ile İnteraktif Grafik Modülü (Hisseye Özel Optimum RSI V6.0)
 """
 import os
+import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import pandas as pd
+from config import get_optimal_rsi
 
-def create_chart(df: pd.DataFrame, symbol: str = "HISSE", save_html: bool = True, output_dir: str = "charts", height: int = 650) -> go.Figure:
+
+def create_chart(
+    df: pd.DataFrame,
+    symbol: str = "HISSE",
+    save_html: bool = True,
+    output_dir: str = "charts",
+    height: int = 680,
+) -> go.Figure:
     """
-    Pine Script görselleştirmesini birebir Plotly interaktif grafiğine dönüştürür:
-    - Panel 1: Mum grafiği, Çıkış Destek Seviyesi (Lowest Low), AL / SAT / RSI Uyarı işaretleri
-    - Panel 2: Net Hacim barları ve Hacim Hareketli Ortalaması (SMA)
-    - Panel 3: RSI (14) çizgisi ve 70 / 30 seviyeleri
-    Mobil ve masaüstü ekranlar için optimize edilmiştir.
+    Hisseye Özel Optimum RSI (V6.0) sinyallerini ve gerçek işlem bağlantı çizgilerini çizer:
+    - Panel 1: Mum grafiği, gerçek AL / SAT noktaları ve kâr/zarar bağlantı çizgileri
+    - Panel 2: Net Hacim barları ve SMA 5 ortalaması
+    - Panel 3: RSI (14), Hisseye Özel Optimum RSI Çıkış Hedefi ve RSI 65 Alım Üst Sınırı
     """
-    # Sadece tarih filtresi içindeki veya son 1-2 yıllık veriyi gösterelim
     plot_df = df.copy()
-    if 'In_Date_Range' in plot_df.columns:
-        # Eğer tarih filtresi aktifse, grafiği başlangıçtan itibaren göster
-        first_valid = plot_df[plot_df['In_Date_Range']].index
+    if "In_Date_Range" in plot_df.columns:
+        first_valid = plot_df[plot_df["In_Date_Range"]].index
         if len(first_valid) > 0:
             plot_df = plot_df.loc[first_valid[0]:]
 
+    clean_sym = symbol.replace(".IS", "")
+    if "Optimal_RSI_Exit" in plot_df.columns and not plot_df.empty:
+        opt_rsi = int(plot_df["Optimal_RSI_Exit"].iloc[-1])
+    else:
+        opt_rsi = get_optimal_rsi(clean_sym)
+
     fig = make_subplots(
-        rows=3, cols=1,
+        rows=3,
+        cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.03,
+        vertical_spacing=0.035,
         row_heights=[0.60, 0.20, 0.20],
         subplot_titles=(
-            f"<b>{symbol}</b> - Fiyat & Sinyaller",
-            "<b>Net Hacim Akışı</b> & NV Ortalaması",
-            "<b>RSI (14)</b> & Aşırı Alım Uyarısı (70)"
-        )
+            f"<b>{clean_sym}</b> - Fiyat & İşlemler (Özel Çıkış Hedefi: RSI {opt_rsi})",
+            "<b>Net Hacim Akışı</b> & NV Ortalaması (SMA 5)",
+            f"<b>RSI (14)</b> & Hisseye Özel Çıkış Seviyesi (RSI {opt_rsi})",
+        ),
     )
 
     # 1. Mum Grafiği
     fig.add_trace(
         go.Candlestick(
             x=plot_df.index,
-            open=plot_df['Open'],
-            high=plot_df['High'],
-            low=plot_df['Low'],
-            close=plot_df['Close'],
+            open=plot_df["Open"],
+            high=plot_df["High"],
+            low=plot_df["Low"],
+            close=plot_df["Close"],
             name="Fiyat",
             increasing_line_color="#26a69a",
-            decreasing_line_color="#ef5350"
+            decreasing_line_color="#ef5350",
         ),
-        row=1, col=1
+        row=1,
+        col=1,
     )
 
-    # 2. Lowest Low Exit Destek Çizgisi (Pine Script: Lowest Low Exit)
-    if 'Lowest_Low_Exit' in plot_df.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=plot_df.index,
-                y=plot_df['Lowest_Low_Exit'].shift(1),
-                mode='lines',
-                line=dict(color='rgba(255, 0, 255, 0.7)', width=1.5, dash='dot'),
-                name="Çıkış Destek Seviyesi (Lowest Low)"
-            ),
-            row=1, col=1
-        )
+    # 2. Gerçek İşlem Çizgileri (AL -> SAT arası kesikli kâr/zarar çizgisi)
+    buy_signals = plot_df[plot_df["Long_Signal"]]
+    exit_signals = plot_df[plot_df["Exit_Signal"]]
 
-    # 3. AL Sinyalleri (Pine Script: Long Condition - Yeşil Üçgen)
-    buy_signals = plot_df[plot_df['Long_Signal']]
+    buy_dates = list(buy_signals.index)
+    exit_dates = list(exit_signals.index)
+
+    exit_labels = []
+    for idx_b, b_dt in enumerate(buy_dates):
+        b_price = float(plot_df.loc[b_dt, "Close"])
+        matching_exits = [e_dt for e_dt in exit_dates if e_dt > b_dt]
+        if matching_exits:
+            e_dt = matching_exits[0]
+            e_price = float(plot_df.loc[e_dt, "Close"])
+            ret_pct = ((e_price - b_price) / b_price) * 100.0
+            line_col = "rgba(0, 230, 118, 0.70)" if ret_pct >= 0 else "rgba(255, 23, 68, 0.75)"
+            fig.add_trace(
+                go.Scatter(
+                    x=[b_dt, e_dt],
+                    y=[b_price, e_price],
+                    mode="lines",
+                    line=dict(color=line_col, width=2, dash="dot"),
+                    hoverinfo="skip",
+                    showlegend=False,
+                ),
+                row=1,
+                col=1,
+            )
+
+    # 3. AL Sinyalleri (Yeşil Üçgen)
     if not buy_signals.empty:
         fig.add_trace(
             go.Scatter(
                 x=buy_signals.index,
-                y=buy_signals['Low'] * 0.985,
-                mode='markers+text',
-                marker=dict(symbol='triangle-up', size=14, color='#00e676', line=dict(width=1, color='white')),
-                text=["AL" for _ in range(len(buy_signals))],
+                y=buy_signals["Low"] * 0.982,
+                mode="markers+text",
+                marker=dict(
+                    symbol="triangle-up",
+                    size=14,
+                    color="#00e676",
+                    line=dict(width=1.2, color="white"),
+                ),
+                text=[f"AL #{i+1}" for i in range(len(buy_signals))],
                 textposition="bottom center",
                 textfont=dict(color="#00e676", size=11),
                 name="AL Sinyali",
-                hoverinfo="x+y+text"
+                customdata=buy_signals["Close"],
+                hovertemplate="<b>AL Sinyali</b><br>Tarih: %{x|%d.%m.%Y}<br>Kapanış: %{customdata:.2f} TL<extra></extra>",
             ),
-            row=1, col=1
+            row=1,
+            col=1,
         )
 
-    # 4. RSI Uyarısı (Pine Script: rsiWarning - Turuncu Baklava)
-    rsi_warns = plot_df[plot_df['RSI_Warning']]
-    if not rsi_warns.empty:
-        fig.add_trace(
-            go.Scatter(
-                x=rsi_warns.index,
-                y=rsi_warns['High'] * 1.015,
-                mode='markers',
-                marker=dict(symbol='diamond', size=9, color='#ff9800', line=dict(width=1, color='black')),
-                name="RSI Uyarısı (Aşırı Alımdan Dönüş)",
-                hoverinfo="x+y+name"
-            ),
-            row=1, col=1
-        )
-
-    # 5. SAT Sinyalleri (Pine Script: Exit Condition - Kırmızı Ters Üçgen)
-    exit_signals = plot_df[plot_df['Exit_Signal']]
+    # 4. SAT Sinyalleri (Kırmızı Ters Üçgen + Getiri %)
     if not exit_signals.empty:
+        for idx_s, s_dt in enumerate(exit_signals.index):
+            s_price = float(plot_df.loc[s_dt, "Close"])
+            prior_buys = [b_dt for b_dt in buy_dates if b_dt < s_dt]
+            if prior_buys:
+                bp = float(plot_df.loc[prior_buys[-1], "Close"])
+                rp = ((s_price - bp) / bp) * 100.0
+                exit_labels.append(f"SAT #{idx_s+1} (%{rp:+.1f})")
+            else:
+                exit_labels.append(f"SAT #{idx_s+1}")
+
         fig.add_trace(
             go.Scatter(
                 x=exit_signals.index,
-                y=exit_signals['High'] * 1.025,
-                mode='markers+text',
-                marker=dict(symbol='triangle-down', size=14, color='#ff1744', line=dict(width=1, color='white')),
-                text=["SAT" for _ in range(len(exit_signals))],
+                y=exit_signals["High"] * 1.022,
+                mode="markers+text",
+                marker=dict(
+                    symbol="triangle-down",
+                    size=14,
+                    color="#ff1744",
+                    line=dict(width=1.2, color="white"),
+                ),
+                text=exit_labels,
                 textposition="top center",
-                textfont=dict(color="#ff1744", size=11),
-                name="SAT Sinyali",
-                hoverinfo="x+y+text"
+                textfont=dict(color="#ff5252", size=11),
+                name=f"SAT (RSI {opt_rsi})",
+                customdata=exit_signals["Close"],
+                hovertemplate=f"<b>SAT (RSI {opt_rsi} Kırılımı)</b><br>Tarih: %{{x|%d.%m.%Y}}<br>Kapanış: %{{customdata:.2f}} TL<extra></extra>",
             ),
-            row=1, col=1
+            row=1,
+            col=1,
         )
 
     # --- PANEL 2: Net Hacim ve Ortalama ---
-    if 'Net_Volume' in plot_df.columns:
-        nv_colors = ['#26a69a' if val >= 0 else '#ef5350' for val in plot_df['Net_Volume']]
+    if "Net_Volume" in plot_df.columns:
+        nv_colors = ["#26a69a" if val >= 0 else "#ef5350" for val in plot_df["Net_Volume"]]
         fig.add_trace(
             go.Bar(
                 x=plot_df.index,
-                y=plot_df['Net_Volume'],
+                y=plot_df["Net_Volume"],
                 marker_color=nv_colors,
                 name="Net Hacim",
-                opacity=0.75
+                opacity=0.75,
             ),
-            row=2, col=1
+            row=2,
+            col=1,
         )
-        if 'NV_Avg' in plot_df.columns:
+        if "NV_Avg" in plot_df.columns:
             fig.add_trace(
                 go.Scatter(
                     x=plot_df.index,
-                    y=plot_df['NV_Avg'],
-                    line=dict(color='#ffb74d', width=1.5),
-                    name="NV Ortalaması (SMA 5)"
+                    y=plot_df["NV_Avg"],
+                    line=dict(color="#ffb74d", width=1.5),
+                    name="NV Ortalaması (SMA 5)",
                 ),
-                row=2, col=1
+                row=2,
+                col=1,
             )
 
-    # --- PANEL 3: RSI Çizgisi ve Referans Çizgileri ---
-    if 'RSI' in plot_df.columns:
+    # --- PANEL 3: RSI ve Hisseye Özel Çıkış Hedefi ---
+    if "RSI" in plot_df.columns:
         fig.add_trace(
             go.Scatter(
                 x=plot_df.index,
-                y=plot_df['RSI'],
-                line=dict(color='#ab47bc', width=2),
-                name="RSI (14)"
+                y=plot_df["RSI"],
+                line=dict(color="#ab47bc", width=2),
+                name="RSI (14)",
             ),
-            row=3, col=1
+            row=3,
+            col=1,
         )
-        # Aşırı alım çizgisi (70)
-        fig.add_hline(y=70, line_dash="dash", line_color="#ef5350", line_width=1, row=3, col=1)
-        # Aşırı satım çizgisi (30)
-        fig.add_hline(y=30, line_dash="dash", line_color="#26a69a", line_width=1, row=3, col=1)
+        fig.add_hline(
+            y=opt_rsi,
+            line_dash="dash",
+            line_color="#ff1744",
+            line_width=1.5,
+            annotation_text=f"Özel Çıkış: RSI {opt_rsi}",
+            annotation_position="top left",
+            annotation_font=dict(color="#ff5252", size=11),
+            row=3,
+            col=1,
+        )
+        fig.add_hline(
+            y=65,
+            line_dash="dot",
+            line_color="rgba(255, 183, 77, 0.55)",
+            line_width=1,
+            row=3,
+            col=1,
+        )
+        fig.add_hline(
+            y=30,
+            line_dash="dash",
+            line_color="#26a69a",
+            line_width=1,
+            row=3,
+            col=1,
+        )
 
-    # Genel Görünüm ve TradingView Koyu Tema Ayarları (Mobil ve Masaüstü Uyumlu)
     fig.update_layout(
         template="plotly_dark",
         paper_bgcolor="#131722",
         plot_bgcolor="#1e222d",
-        showlegend=False,  # Mobilde başlıklarla çakışmayı önlemek için sadeleştirildi
+        showlegend=False,
         xaxis_rangeslider_visible=False,
-        margin=dict(l=10, r=10, t=25, b=20),
+        margin=dict(l=10, r=10, t=28, b=20),
         height=height,
-        hovermode='x unified'
+        hovermode="x unified",
     )
 
-    # Hafta sonu boşluklarını temizle (Borsa açık günleri göster)
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
     if save_html:

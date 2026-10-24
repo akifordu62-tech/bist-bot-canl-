@@ -1,20 +1,22 @@
 """
-Telegram Bildirim Modülü
-Al / Sat / RSI Uyarısı sinyallerini Telegram üzerinden iletir.
+Telegram Bildirim Modülü (BIST 30 | Hisseye Özel Optimum RSI | Maks. 5 Hisse Portföy Sistemi)
+Eski BIST 100 tekil mesaj karmaşası kaldırılmıştır; sadece BIST 30 ve 5 hisse kontenjanına göre
+tek bir toplu günlük portföy raporu veya 'Bugün sinyal olmamıştır' bilgilendirmesi gönderir.
 """
 import os
+from typing import List, Dict, Any
 import requests
 from config import TELEGRAM_CONFIG
 
+
 def send_telegram_message(text: str, token: str = None, chat_id: str = None) -> bool:
     """
-    Belirtilen Telegram botu ve chat ID'sine mesaj gönderir.
-    GitHub Secrets ortam değişkenlerine (os.getenv) en yüksek önceliği verir.
+    Belirtilen Telegram botu ve chat ID'sine HTML formatlı mesaj gönderir.
+    GitHub Secrets ortam değişkenlerine (os.getenv) öncelik verir.
     """
     bot_token = token or os.getenv("TELEGRAM_TOKEN") or TELEGRAM_CONFIG.get("token")
     target_chat = chat_id or os.getenv("TELEGRAM_CHAT_ID") or TELEGRAM_CONFIG.get("chat_id")
-    
-    # GitHub Secrets mevcutsa otomatik olarak aktifleştir
+
     if os.getenv("TELEGRAM_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"):
         enabled = True
     else:
@@ -37,90 +39,162 @@ def send_telegram_message(text: str, token: str = None, chat_id: str = None) -> 
         "chat_id": str(target_chat).strip(),
         "text": text,
         "parse_mode": "HTML",
-        "disable_web_page_preview": True
+        "disable_web_page_preview": True,
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=12)
         res_data = response.json()
         if res_data.get("ok"):
-            print("[Telegram Başarılı]: Mesaj Telegram'a iletildi!")
+            print("[Telegram Başarılı]: Rapor Telegram'a iletildi!")
             return True
-        else:
-            err = res_data.get('description', 'Bilinmeyen hata')
-            print(f"[Telegram API Hatası]: {err}")
-            return False
+        err = res_data.get("description", "Bilinmeyen hata")
+        print(f"[Telegram API Hatası]: {err}")
+        return False
     except Exception as e:
         print(f"[Telegram İletişim Hatası]: {e}")
         return False
 
-def notify_signal(symbol: str, signal_type: str, price: float, rsi: float, date_str: str, 
-                  win_rate: float = None, avg_win_pct: float = None, index_name: str = None, 
-                  win_trades: int = None, total_trades: int = None, profit_factor: float = None,
-                  extra_info: str = "") -> bool:
-    """
-    Kullanıcının isteğine göre zenginleştirilmiş sinyal bildirim formatı:
-    - Sinyal Türü & Hisse Kodu
-    - BIST 100 / BIST 30 Endeks Bilgisi
-    - Fiyat & RSI Değeri
-    - Kazanma Oranı (Win Rate) & İşlem Sayısı
-    - Ortalama Kâr & Kâr Faktörü
-    - Tarih
-    """
-    clean_sym = symbol.replace(".IS", "")
-    
-    if signal_type == "BUY":
-        icon = "🟢"
-        action = "ALIŞ SİNYALİ"
-    elif signal_type == "SELL":
-        icon = "🔴"
-        action = "SATIŞ SİNYALİ"
-    elif signal_type == "RSI_WARN":
-        icon = "⚠️"
-        action = "RSI UYARISI"
-    else:
-        icon = "ℹ️"
-        action = signal_type
 
-    msg_lines = [
-        f"{icon} <b>[PYTHON BOT] #{clean_sym} {action}</b>",
-        f"🏷️ <b>Endeks:</b> {index_name or 'BIST 100'}",
-        f"💵 <b>Fiyat:</b> {price:.2f} TL | <b>RSI:</b> {rsi:.1f}"
+def format_bist30_daily_report(
+    date_str: str,
+    bought_list: List[Dict[str, Any]],
+    sold_list: List[Dict[str, Any]],
+    open_positions: List[Dict[str, Any]],
+    skipped_list: List[Dict[str, Any]] = None,
+    max_positions: int = 5,
+    allocation_pct: float = 10.0,
+) -> str:
+    """
+    BIST 30 + Maksimum 5 Hisse (%10 Alım) kurallarına göre tek toplu Telegram mesajını oluşturur.
+    """
+    skipped_list = skipped_list or []
+    has_action = bool(bought_list or sold_list)
+    open_cnt = len(open_positions)
+    empty_slots = max(0, max_positions - open_cnt)
+    stock_exposure = int(open_cnt * allocation_pct)
+    cash_exposure = max(0, 100 - stock_exposure)
+
+    lines = [
+        "📊 <b>BIST 30 PORTFÖY & SİNYAL RAPORU</b>",
+        f"📅 <b>Tarih:</b> {date_str} | <b>Mod:</b> Özel Optimum RSI",
+        "━━━━━━━━━━━━━━━━━━━━",
     ]
 
-    # Kazanma Oranı ve İşlem Sayısı
-    if win_rate is not None and win_rate > 0:
-        trades_text = f" ({win_trades}/{total_trades} Başarılı İşlem)" if (win_trades is not None and total_trades is not None and total_trades > 0) else ""
-        msg_lines.append(f"🎯 <b>Kazanma Oranı:</b> %{win_rate:.1f}{trades_text}")
-
-    # Ortalama Kâr ve Kâr Faktörü
-    metrics_str = []
-    if avg_win_pct is not None and avg_win_pct > 0:
-        metrics_str.append(f"📈 <b>Ort. Kâr:</b> %{avg_win_pct:.1f}")
-    if profit_factor is not None and profit_factor > 0:
-        metrics_str.append(f"⚡ <b>Kâr Faktörü:</b> {profit_factor:.2f}")
-    if metrics_str:
-        msg_lines.append(" | ".join(metrics_str))
-
-    msg_lines.append(f"📅 <b>Tarih:</b> {date_str}")
-
-    if extra_info:
-        msg_lines.append(f"ℹ️ {extra_info}")
-
-    message = "\n".join(msg_lines)
-    return send_telegram_message(message)
-
-def test_telegram_connection() -> bool:
-    """
-    Telegram ayarlarını test eden sade mesaj.
-    """
-    msg = "🤖 [PYTHON BOT] Bağlantı başarılı! Sistem aktif ve hazır."
-    res = send_telegram_message(msg)
-    if res:
-        print("[Telegram Başarılı]: Test mesajı Telegram'a iletildi!")
+    if not has_action:
+        lines.append("⚪ <b>Bugün sinyal olmamıştır.</b>")
+        if open_cnt >= max_positions and skipped_list:
+            skipped_names = ", ".join(f"#{x['clean_symbol']}" for x in skipped_list)
+            lines.append(
+                f"🔒 <i>Portföy kontenjanı dolu ({open_cnt}/{max_positions}) olduğu için yeni alım yapılmamıştır "
+                f"(Pas geçilen: {skipped_names}). Sepetteki hisselerde SAT sinyali yoktur.</i>"
+            )
+        else:
+            lines.append(
+                "<i>BIST 30 portföyünüz için bugün yeni bir AL veya açık hisselerinizde SAT sinyali oluşmadı.</i>"
+            )
     else:
-        print("[Telegram Başarısız]: Mesaj gönderilemedi. config.py içerisindeki token ve chat_id bilgilerini kontrol edin.")
-    return res
+        if sold_list:
+            lines.append("\n🔴 <b>SATIŞ SİNYALİ (Sepetten Çıkanlar):</b>")
+            for s in sold_list:
+                ret_val = float(s.get("return_pct", 0.0))
+                sign = "+" if ret_val >= 0 else ""
+                lines.append(
+                    f"• <b>#{s['clean_symbol']}</b> | Çıkış: {s['exit_price']:.2f} TL "
+                    f"(Giriş: {s['entry_price']:.2f} TL | <b>%{sign}{ret_val:.1f}</b>)"
+                )
+                lines.append(
+                    f"  ↳ Güncel RSI: {s['rsi']:.1f} (Özel Hedef <b>RSI {s['target_rsi']}</b> aşağı kırıldı)"
+                )
+
+        if bought_list:
+            lines.append(f"\n🟢 <b>YENİ ALIM SİNYALİ (Sepete Girenler - %{allocation_pct:.0f} Pay):</b>")
+            for b in bought_list:
+                wr_txt = f"%{b['win_rate']:.1f}" if b.get("win_rate") is not None else "-"
+                aw_txt = f"%{b['avg_win']:.1f}" if b.get("avg_win") is not None else "-"
+                lines.append(
+                    f"• <b>#{b['clean_symbol']}</b> | Fiyat: {b['price']:.2f} TL | RSI: {b['rsi']:.1f}"
+                )
+                lines.append(
+                    f"  ↳ Özel Çıkış Hedefi: <b>RSI {b['target_rsi']}</b> | Başarı: {wr_txt} (Ort. Kâr: {aw_txt})"
+                )
+
+        if skipped_list:
+            skipped_names = ", ".join(f"#{x['clean_symbol']} (RSI {x['rsi']:.1f})" for x in skipped_list)
+            lines.append(
+                f"\n🔒 <i>5 hisse sınırı dolduğu için alınmayan diğer BIST 30 sinyalleri: {skipped_names}</i>"
+            )
+
+    lines.append("\n━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        f"💼 <b>AKTİF SEPET ({open_cnt}/{max_positions} Hisse | %{stock_exposure} Borsa - %{cash_exposure} Nakit):</b>"
+    )
+
+    if open_positions:
+        bought_syms = {b["clean_symbol"] for b in bought_list}
+        for idx, pos in enumerate(open_positions, 1):
+            csym = pos["clean_symbol"]
+            ep = float(pos["entry_price"])
+            lp = float(pos.get("last_price", ep))
+            lrsi = float(pos.get("last_rsi", pos.get("entry_rsi", 50.0)))
+            trsi = int(pos["target_rsi"])
+            pnl = float(pos.get("pnl_pct", ((lp - ep) / ep * 100.0) if ep > 0 else 0.0))
+            sign = "+" if pnl >= 0 else ""
+
+            if csym in bought_syms:
+                lines.append(
+                    f"{idx}. <b>#{csym}</b> | {lp:.2f} TL (<b>Yeni Eklendi</b>) | RSI: {lrsi:.1f} / Hedef: {trsi}"
+                )
+            else:
+                lines.append(
+                    f"{idx}. <b>#{csym}</b> | {ep:.2f} ➔ {lp:.2f} TL (<b>%{sign}{pnl:.1f}</b>) | RSI: {lrsi:.1f} / Hedef: {trsi}"
+                )
+    else:
+        lines.append("• <i>Şu an sepette açık hisse bulunmuyor (%100 Nakit / Mevduat).</i>")
+
+    if empty_slots > 0:
+        lines.append(f"⚪ <i>Boş Kontenjan: {empty_slots} Hisse (Yeni BIST 30 sinyaline hazır)</i>")
+    else:
+        lines.append("🔒 <i>Kontenjan Dolu (5/5): Bir hisse hedefe ulaşıp satılana kadar yeni AL gelmez.</i>")
+
+    return "\n".join(lines)
+
+
+def send_bist30_daily_report(
+    date_str: str,
+    bought_list: List[Dict[str, Any]],
+    sold_list: List[Dict[str, Any]],
+    open_positions: List[Dict[str, Any]],
+    skipped_list: List[Dict[str, Any]] = None,
+    max_positions: int = 5,
+    allocation_pct: float = 10.0,
+) -> bool:
+    msg = format_bist30_daily_report(
+        date_str=date_str,
+        bought_list=bought_list,
+        sold_list=sold_list,
+        open_positions=open_positions,
+        skipped_list=skipped_list,
+        max_positions=max_positions,
+        allocation_pct=allocation_pct,
+    )
+    return send_telegram_message(msg)
+
+
+def test_telegram_connection(token: str = None, chat_id: str = None) -> bool:
+    """
+    Telegram ayarlarını yeni BIST 30 (5 Hisse + Özel Optimum RSI) formatıyla test eder.
+    """
+    msg = (
+        "🤖 <b>BIST 30 OPTİMUM RSI PORTFÖY BOTU AKTİF!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "✅ <b>Kapsam:</b> Sadece BIST 30 Şirketleri\n"
+        "✅ <b>Strateji:</b> Hisseye Özel Optimum RSI (2020–Günümüz)\n"
+        "✅ <b>Portföy Kuralı:</b> Maksimum 5 Açık Hisse (%10 Pay / Hisse)\n"
+        "✅ <b>Bildirim Modu:</b> Günlük Tek Toplu Portföy & Sinyal Özeti"
+    )
+    return send_telegram_message(msg, token=token, chat_id=chat_id)
+
 
 if __name__ == "__main__":
     print("Telegram bağlantısı test ediliyor...")
