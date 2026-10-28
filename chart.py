@@ -1,11 +1,12 @@
 """
-Plotly ile İnteraktif Grafik Modülü (Hisseye Özel Optimum RSI V6.0)
+Plotly ile İnteraktif Grafik Modülü (V7.0 - 1. Mod Hisseye Özel Giriş/Soğuma & Çıkış RSI)
 """
 import os
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from config import get_optimal_rsi
+from config import get_stock_params, format_stock_entry_rule
 
 
 def create_chart(
@@ -16,10 +17,10 @@ def create_chart(
     height: int = 680,
 ) -> go.Figure:
     """
-    Hisseye Özel Optimum RSI (V6.0) sinyallerini ve gerçek işlem bağlantı çizgilerini çizer:
+    1. Mod Hisseye Özel Giriş/Soğuma & Çıkış RSI sinyallerini ve gerçek işlem bağlantı çizgilerini çizer:
     - Panel 1: Mum grafiği, gerçek AL / SAT noktaları ve kâr/zarar bağlantı çizgileri
     - Panel 2: Net Hacim barları ve SMA 5 ortalaması
-    - Panel 3: RSI (14), Hisseye Özel Optimum RSI Çıkış Hedefi ve RSI 65 Alım Üst Sınırı
+    - Panel 3: RSI (14), Özel Çıkış Hedefi, Özel Alım Üst Sınırı ve varsa Özel Soğuma (Reset RSI) çizgisi
     """
     plot_df = df.copy()
     if "In_Date_Range" in plot_df.columns:
@@ -28,10 +29,39 @@ def create_chart(
             plot_df = plot_df.loc[first_valid[0]:]
 
     clean_sym = symbol.replace(".IS", "")
+    sparams = get_stock_params(clean_sym)
+
     if "Optimal_RSI_Exit" in plot_df.columns and not plot_df.empty:
         opt_rsi = int(plot_df["Optimal_RSI_Exit"].iloc[-1])
     else:
-        opt_rsi = get_optimal_rsi(clean_sym)
+        opt_rsi = int(sparams["exit_rsi"])
+
+    if "Optimal_Max_Buy_RSI" in plot_df.columns and not plot_df.empty:
+        max_buy_rsi = float(plot_df["Optimal_Max_Buy_RSI"].iloc[-1])
+    else:
+        max_buy_rsi = float(sparams.get("max_buy_rsi", 65.0))
+
+    reset_rsi = None
+    if "Optimal_Reset_RSI" in plot_df.columns and not plot_df.empty:
+        val_rst = plot_df["Optimal_Reset_RSI"].iloc[-1]
+        if pd.notna(val_rst) and float(val_rst) > 0:
+            reset_rsi = float(val_rst)
+    elif sparams.get("reset_rsi") is not None:
+        reset_rsi = float(sparams["reset_rsi"])
+
+    rule_txt = format_stock_entry_rule(
+        {
+            "exit_rsi": opt_rsi,
+            "reset_rsi": reset_rsi,
+            "max_buy_rsi": max_buy_rsi,
+            "cooldown_bars": int(plot_df["Optimal_Cooldown_Bars"].iloc[-1])
+            if "Optimal_Cooldown_Bars" in plot_df.columns and not plot_df.empty
+            else int(sparams.get("cooldown_bars", 0)),
+            "no_higher_bars": int(plot_df["Optimal_No_Higher_Bars"].iloc[-1])
+            if "Optimal_No_Higher_Bars" in plot_df.columns and not plot_df.empty
+            else int(sparams.get("no_higher_bars", 0)),
+        }
+    )
 
     fig = make_subplots(
         rows=3,
@@ -40,9 +70,10 @@ def create_chart(
         vertical_spacing=0.035,
         row_heights=[0.60, 0.20, 0.20],
         subplot_titles=(
-            f"<b>{clean_sym}</b> - Fiyat & İşlemler (Özel Çıkış Hedefi: RSI {opt_rsi})",
+            f"<b>{clean_sym}</b> - Fiyat & İşlemler (Çıkış: RSI {opt_rsi} | {rule_txt})",
             "<b>Net Hacim Akışı</b> & NV Ortalaması (SMA 5)",
-            f"<b>RSI (14)</b> & Hisseye Özel Çıkış Seviyesi (RSI {opt_rsi})",
+            f"<b>RSI (14)</b> & Hisseye Özel Seviyeler (Çıkış: {opt_rsi}"
+            + (f" | Soğuma: ≤{int(reset_rsi)})" if reset_rsi is not None else ")"),
         ),
     )
 
@@ -70,7 +101,7 @@ def create_chart(
     exit_dates = list(exit_signals.index)
 
     exit_labels = []
-    for idx_b, b_dt in enumerate(buy_dates):
+    for b_dt in buy_dates:
         b_price = float(plot_df.loc[b_dt, "Close"])
         matching_exits = [e_dt for e_dt in exit_dates if e_dt > b_dt]
         if matching_exits:
@@ -175,7 +206,7 @@ def create_chart(
                 col=1,
             )
 
-    # --- PANEL 3: RSI ve Hisseye Özel Çıkış Hedefi ---
+    # --- PANEL 3: RSI ve Hisseye Özel Seviyeler ---
     if "RSI" in plot_df.columns:
         fig.add_trace(
             go.Scatter(
@@ -199,13 +230,28 @@ def create_chart(
             col=1,
         )
         fig.add_hline(
-            y=65,
+            y=max_buy_rsi,
             line_dash="dot",
-            line_color="rgba(255, 183, 77, 0.55)",
-            line_width=1,
+            line_color="rgba(255, 183, 77, 0.70)",
+            line_width=1.2,
+            annotation_text=f"Alım Üst RSI: {int(max_buy_rsi)}",
+            annotation_position="top right",
+            annotation_font=dict(color="#ffb74d", size=10),
             row=3,
             col=1,
         )
+        if reset_rsi is not None:
+            fig.add_hline(
+                y=reset_rsi,
+                line_dash="dash",
+                line_color="#00e5ff",
+                line_width=1.3,
+                annotation_text=f"Özel Soğuma: RSI ≤ {int(reset_rsi)}",
+                annotation_position="bottom left",
+                annotation_font=dict(color="#00e5ff", size=10),
+                row=3,
+                col=1,
+            )
         fig.add_hline(
             y=30,
             line_dash="dash",

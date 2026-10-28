@@ -2,125 +2,15 @@
   "universe": "BIST30",
   "max_positions": 5,
   "allocation_pct": 10.0,
-  "updated_at": "2026-10-27 20:13",
-  "last_processed_date": "2026-10-27",
-  "open_positions": [
-    {
-      "symbol": "TTKOM.IS",
-      "clean_symbol": "TTKOM",
-      "entry_date": "2026-10-26",
-      "entry_price": 46.8,
-      "entry_rsi": 33.0,
-      "target_rsi": 78,
-      "allocation_pct": 10.0,
-      "last_price": 47.08,
-      "last_rsi": 34.4,
-      "pnl_pct": 0.6
-    },
-    {
-      "symbol": "SISE.IS",
-      "clean_symbol": "SISE",
-      "entry_date": "2026-10-26",
-      "entry_price": 34.4,
-      "entry_rsi": 33.5,
-      "target_rsi": 74,
-      "allocation_pct": 10.0,
-      "last_price": 33.76,
-      "last_rsi": 31.2,
-      "pnl_pct": -1.86
-    },
-    {
-      "symbol": "VAKBN.IS",
-      "clean_symbol": "VAKBN",
-      "entry_date": "2026-10-26",
-      "entry_price": 30.18,
-      "entry_rsi": 34.8,
-      "target_rsi": 77,
-      "allocation_pct": 10.0,
-      "last_price": 30.88,
-      "last_rsi": 39.6,
-      "pnl_pct": 2.32
-    },
-    {
-      "symbol": "FROTO.IS",
-      "clean_symbol": "FROTO",
-      "entry_date": "2026-10-26",
-      "entry_price": 67.95,
-      "entry_rsi": 38.0,
-      "target_rsi": 78,
-      "allocation_pct": 10.0,
-      "last_price": 69.9,
-      "last_rsi": 44.3,
-      "pnl_pct": 2.87
-    },
-    {
-      "symbol": "ISCTR.IS",
-      "clean_symbol": "ISCTR",
-      "entry_date": "2026-10-26",
-      "entry_price": 12.26,
-      "entry_rsi": 40.0,
-      "target_rsi": 77,
-      "allocation_pct": 10.0,
-      "last_price": 12.29,
-      "last_rsi": 40.6,
-      "pnl_pct": 0.24
-    }
-  ],
+  "updated_at": "2026-10-28 17:35",
+  "last_processed_date": "",
+  "last_calibrated_month": "2026-10",
+  "open_positions": [],
   "closed_history": [],
   "last_daily_actions": {
-    "date": "2026-10-27",
+    "date": "",
     "bought": [],
     "sold": [],
-    "skipped": [
-      {
-        "symbol": "GUBRF.IS",
-        "clean_symbol": "GUBRF",
-        "price": 278.75,
-        "rsi": 23.6,
-        "target_rsi": 72
-      },
-      {
-        "symbol": "TRMET.IS",
-        "clean_symbol": "TRMET",
-        "price": 102.5,
-        "rsi": 30.2,
-        "target_rsi": 76
-      },
-      {
-        "symbol": "EREGL.IS",
-        "clean_symbol": "EREGL",
-        "price": 31.46,
-        "rsi": 30.6,
-        "target_rsi": 71
-      },
-      {
-        "symbol": "AEFES.IS",
-        "clean_symbol": "AEFES",
-        "price": 16.26,
-        "rsi": 34.2,
-        "target_rsi": 76
-      },
-      {
-        "symbol": "KRDMD.IS",
-        "clean_symbol": "KRDMD",
-        "price": 37.6,
-        "rsi": 34.8,
-        "target_rsi": 77
-      },
-      {
-        "symbol": "TOASO.IS",
-        "clean_symbol": "TOASO",
-        "price": 231.5,
-        "rsi": 37.2,
-        "target_rsi": 77
-      },
-      {
-        "symbol": "ASELS.IS",
-        "clean_symbol": "ASELS",
-        "price": 340.75,
-        "rsi": 44.9,
-        "target_rsi": 76
-      }
-    ]
+    "skipped": []
   }
 }

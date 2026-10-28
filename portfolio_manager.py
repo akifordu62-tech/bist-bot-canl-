@@ -1,17 +1,16 @@
 """
-BIST 30 Otomatik 5 Hisse Portföy Takip Yöneticisi
+BIST 30 Otomatik 5 Hisse Portföy Takip Yöneticisi (V7.0 - 1. Mod Hisseye Özel Giriş/Soğuma & Otomatik Öğrenme)
 Kurallar:
 - Sadece BIST 30 şirketleri alınır.
 - Aynı anda en fazla 5 açık hisse taşınır (Her alım portföyün %10'u -> Maksimum %50 Borsa).
-- Boş kontenjan varsa aynı gün AL veren BIST 30 hisseleri arasından RSI değeri en düşük olanlar sırayla seçilir.
-- Portföy 5/5 doluyken yeni AL sinyali üretilmez.
-- SAT sinyali sadece portföyde açık olan 5 hisseden biri kendi özel optimum RSI hedefine ulaştığında üretilir.
+- Boş kontenjan varsa aynı gün AL veren (soğuma kuralını geçmiş) BIST 30 hisseleri arasından RSI değeri en düşük olanlar sırayla seçilir.
+- Açık pozisyon devam ederken giriş anındaki hedef RSI kilitli kalır; pozisyon SAT ile kapandığı anda yeni işlem verisi eklenerek hissenin özel seviyeleri yeniden hesaplanır.
 """
 import os
 import json
 import datetime
-from typing import Dict, Any, List
-from config import PORTFOLIO_CONFIG, get_optimal_rsi
+from typing import Dict, Any
+from config import PORTFOLIO_CONFIG, get_optimal_rsi, get_stock_params, format_stock_entry_rule
 
 PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), "portfolio_state.json")
 
@@ -23,6 +22,7 @@ def _default_state() -> Dict[str, Any]:
         "allocation_pct": float(PORTFOLIO_CONFIG.get("allocation_pct", 10.0)),
         "updated_at": datetime.date.today().isoformat(),
         "last_processed_date": "",
+        "last_calibrated_month": "",
         "open_positions": [],
         "closed_history": [],
         "last_daily_actions": {
@@ -78,7 +78,8 @@ def add_manual_position(
         return False, f"Portföy kontenjanı dolu ({max_pos}/{max_pos}). Yeni hisse eklenemez."
 
     dt_str = entry_date or datetime.date.today().isoformat()
-    target_rsi = get_optimal_rsi(clean)
+    sparams = get_stock_params(clean)
+    target_rsi = int(sparams["exit_rsi"])
     state["open_positions"].append(
         {
             "symbol": full_sym,
@@ -86,7 +87,8 @@ def add_manual_position(
             "entry_date": dt_str,
             "entry_price": round(float(entry_price), 2),
             "entry_rsi": round(float(entry_rsi), 1),
-            "target_rsi": int(target_rsi),
+            "target_rsi": target_rsi,
+            "entry_rule": format_stock_entry_rule(sparams),
             "allocation_pct": state["allocation_pct"],
             "last_price": round(float(entry_price), 2),
             "last_rsi": round(float(entry_rsi), 1),
@@ -94,10 +96,10 @@ def add_manual_position(
         }
     )
     save_portfolio_state(state)
-    return True, f"{clean} portföye eklendi ({len(state['open_positions'])}/{max_pos})."
+    return True, f"{clean} portföye eklendi ({len(state['open_positions'])}/{max_pos} | Kilitli Çıkış Hedefi: RSI {target_rsi})."
 
 
-def remove_manual_position(symbol: str, exit_price: float = None) -> tuple[bool, str]:
+def remove_manual_position(symbol: str, exit_price: float = None, df_for_recal=None) -> tuple[bool, str]:
     """
     Web arayüzünden açık bir pozisyonu manuel kapatmak/silmek için yardımcı fonksiyon.
     """
@@ -119,6 +121,15 @@ def remove_manual_position(symbol: str, exit_price: float = None) -> tuple[bool,
     ep = float(removed["entry_price"])
     ret_pct = ((xp - ep) / ep * 100.0) if ep > 0 else 0.0
 
+    recal_note = ""
+    if df_for_recal is not None and not df_for_recal.empty:
+        try:
+            from strategy import recalibrate_and_save_stock
+            new_p = recalibrate_and_save_stock(clean, df_for_recal)
+            recal_note = f" | Güncel Seviyeler: Çıkış RSI {new_p['exit_rsi']} ({new_p['rule_summary']})"
+        except Exception:
+            pass
+
     state["closed_history"].append(
         {
             "symbol": removed["symbol"],
@@ -134,4 +145,4 @@ def remove_manual_position(symbol: str, exit_price: float = None) -> tuple[bool,
     )
     state["open_positions"] = remaining
     save_portfolio_state(state)
-    return True, f"{clean} portföyden çıkarıldı ({len(remaining)}/{state['max_positions']})."
+    return True, f"{clean} portföyden çıkarıldı ({len(remaining)}/{state['max_positions']}){recal_note}."

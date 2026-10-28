@@ -1,7 +1,7 @@
 """
-Telegram Bildirim Modülü (BIST 30 | Hisseye Özel Optimum RSI | Maks. 5 Hisse Portföy Sistemi)
-Eski BIST 100 tekil mesaj karmaşası kaldırılmıştır; sadece BIST 30 ve 5 hisse kontenjanına göre
-tek bir toplu günlük portföy raporu veya 'Bugün sinyal olmamıştır' bilgilendirmesi gönderir.
+Telegram Bildirim Modülü (V7.0 - BIST 30 | 1. Mod Özel Giriş/Soğuma & Çıkış RSI | Maks. 5 Hisse Portföy)
+- Sadece BIST 30 ve 5 hisse kontenjanına göre tek bir toplu günlük portföy raporu gönderir.
+- SAT gerçekleştiğinde yeni kapanan işlem verisiyle güncellenen özel RSI seviyelerini de raporlar.
 """
 import os
 from typing import List, Dict, Any
@@ -66,7 +66,8 @@ def format_bist30_daily_report(
     allocation_pct: float = 10.0,
 ) -> str:
     """
-    BIST 30 + Maksimum 5 Hisse (%10 Alım) kurallarına göre tek toplu Telegram mesajını oluşturur.
+    BIST 30 + Maksimum 5 Hisse (%10 Alım) + 1. Mod Özel Giriş/Soğuma/Çıkış RSI kurallarına göre
+    tek toplu Telegram mesajını oluşturur.
     """
     skipped_list = skipped_list or []
     has_action = bool(bought_list or sold_list)
@@ -77,7 +78,7 @@ def format_bist30_daily_report(
 
     lines = [
         "📊 <b>BIST 30 PORTFÖY & SİNYAL RAPORU</b>",
-        f"📅 <b>Tarih:</b> {date_str} | <b>Mod:</b> Özel Optimum RSI",
+        f"📅 <b>Tarih:</b> {date_str} | <b>Mod:</b> 1. Mod (Özel Giriş/Soğuma & Çıkış RSI)",
         "━━━━━━━━━━━━━━━━━━━━",
     ]
 
@@ -104,20 +105,28 @@ def format_bist30_daily_report(
                     f"(Giriş: {s['entry_price']:.2f} TL | <b>%{sign}{ret_val:.1f}</b>)"
                 )
                 lines.append(
-                    f"  ↳ Güncel RSI: {s['rsi']:.1f} (Özel Hedef <b>RSI {s['target_rsi']}</b> aşağı kırıldı)"
+                    f"  ↳ Güncel RSI: {s['rsi']:.1f} (Kilitli Hedef <b>RSI {s['target_rsi']}</b> aşağı kırıldı)"
                 )
+                if s.get("new_exit_rsi"):
+                    lines.append(
+                        f"  ↳ 🔄 <i>Yeni işlem verisi eklendi ➔ Sonraki Hedef: RSI {s['new_exit_rsi']} "
+                        f"({s.get('new_entry_rule', '')})</i>"
+                    )
 
         if bought_list:
             lines.append(f"\n🟢 <b>YENİ ALIM SİNYALİ (Sepete Girenler - %{allocation_pct:.0f} Pay):</b>")
             for b in bought_list:
                 wr_txt = f"%{b['win_rate']:.1f}" if b.get("win_rate") is not None else "-"
                 aw_txt = f"%{b['avg_win']:.1f}" if b.get("avg_win") is not None else "-"
+                rule_txt = b.get("entry_rule", "")
                 lines.append(
                     f"• <b>#{b['clean_symbol']}</b> | Fiyat: {b['price']:.2f} TL | RSI: {b['rsi']:.1f}"
                 )
                 lines.append(
-                    f"  ↳ Özel Çıkış Hedefi: <b>RSI {b['target_rsi']}</b> | Başarı: {wr_txt} (Ort. Kâr: {aw_txt})"
+                    f"  ↳ Kilitli Çıkış Hedefi: <b>RSI {b['target_rsi']}</b> | Başarı: {wr_txt} (Ort. Kâr: {aw_txt})"
                 )
+                if rule_txt:
+                    lines.append(f"  ↳ 🛡️ <i>Hisseye Özel Filtre: {rule_txt}</i>")
 
         if skipped_list:
             skipped_names = ", ".join(f"#{x['clean_symbol']} (RSI {x['rsi']:.1f})" for x in skipped_list)
@@ -183,15 +192,15 @@ def send_bist30_daily_report(
 
 def test_telegram_connection(token: str = None, chat_id: str = None) -> bool:
     """
-    Telegram ayarlarını yeni BIST 30 (5 Hisse + Özel Optimum RSI) formatıyla test eder.
+    Telegram ayarlarını V7.0 (1. Mod Hisseye Özel Giriş/Soğuma & Otomatik Öğrenme) formatıyla test eder.
     """
     msg = (
-        "🤖 <b>BIST 30 OPTİMUM RSI PORTFÖY BOTU AKTİF!</b>\n"
+        "🤖 <b>BIST 30 1. MOD ÖZEL OPTİMUM RSI PORTFÖY BOTU AKTİF!</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "✅ <b>Kapsam:</b> Sadece BIST 30 Şirketleri\n"
-        "✅ <b>Strateji:</b> Hisseye Özel Optimum RSI (2020–Günümüz)\n"
-        "✅ <b>Portföy Kuralı:</b> Maksimum 5 Açık Hisse (%10 Pay / Hisse)\n"
-        "✅ <b>Bildirim Modu:</b> Günlük Tek Toplu Portföy & Sinyal Özeti"
+        "✅ <b>Strateji:</b> 1. Mod — Hisseye Özel Giriş/Soğuma + Çıkış RSI\n"
+        "✅ <b>Canlı Öğrenme:</b> Her kapanan işlem (SAT) sonrası seviyeler otomatik güncellenir\n"
+        "✅ <b>Portföy Kuralı:</b> Maksimum 5 Açık Hisse (%10 Pay / Hisse)"
     )
     return send_telegram_message(msg, token=token, chat_id=chat_id)
 
