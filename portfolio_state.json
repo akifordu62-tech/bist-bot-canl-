@@ -2,13 +2,13 @@
   "universe": "BIST30",
   "max_positions": 5,
   "allocation_pct": 10.0,
-  "updated_at": "2026-10-28 17:35",
-  "last_processed_date": "",
+  "updated_at": "2026-10-28 20:30",
+  "last_processed_date": "2026-10-28",
   "last_calibrated_month": "2026-10",
   "open_positions": [],
   "closed_history": [],
   "last_daily_actions": {
-    "date": "",
+    "date": "2026-10-28",
     "bought": [],
     "sold": [],
     "skipped": []
