@@ -37,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: BIST 30 Optimum RSI Taramasini Calistir ve Telegrama Gonder
+      - name: BIST 30 1. Mod Ozel RSI Taramasini Calistir ve Telegrama Gonder
         if: github.event_name != 'schedule' || github.event.schedule == '30 15 * * 1-5'
         env:
           TELEGRAM_ENABLED: 'True'
@@ -46,10 +46,10 @@ jobs:
         run: |
           python scanner.py
 
-      - name: 5 Hisselik Portfoy Durumunu (portfolio_state.json) Kaydet
+      - name: Portfoy Durumunu ve Guncellenen Ozel RSI Seviyelerini Kaydet
         if: github.event_name != 'schedule' || github.event.schedule == '30 15 * * 1-5'
         run: |
           git config user.name "BIST30-Portfolio-Bot"
           git config user.email "bot@users.noreply.github.com"
-          git add portfolio_state.json
-          git diff --cached --quiet || (git commit -m "chore: update BIST 30 5-stock portfolio state [skip ci]" && git push)
+          git add portfolio_state.json optimal_params.json
+          git diff --cached --quiet || (git commit -m "chore: update BIST 30 portfolio state and optimal RSI params [skip ci]" && git push)
