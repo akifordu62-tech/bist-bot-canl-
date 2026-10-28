@@ -1,7 +1,7 @@
 """
-Net Hacim Akışı & 1. Mod Hisseye Özel Giriş/Soğuma/Çıkış RSI Strateji Motoru (V7.0)
-- Her hisse için özel Giriş Üst RSI, SAT Sonrası Soğuma (Reset RSI / Bekleme / Pahalıdan Almama) ve Çıkış RSI uygular.
-- İşlem kapandığında (SAT) yeni işlem verisini dahil ederek hissenin giriş ve çıkış RSI seviyelerini otomatik günceller.
+Net Hacim Akışı & Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma + Çıkış RSI) Strateji Motoru (V8.0)
+- Her hissenin kendi tahta karakterine göre V-Tipi (Eşzamanlı Soğuma) veya W-Tipi (Önce RSI Soğusun -> Sonra Kriter Ara) dönüş kuralını ve Özel Çıkış RSI hedefini uygular.
+- İşlem kapandığında (SAT) yeni işlem verisini dahil ederek hissenin V/W tipini, soğuma ve çıkış RSI seviyelerini otomatik günceller.
 """
 import datetime
 from typing import Dict, Any, Optional
@@ -90,9 +90,10 @@ def calibrate_stock_parameters(
     start_date_str: str = "2020-01-01",
 ) -> Dict[str, Any]:
     """
-    1. Mod (Tepe Korumalı Dengeli Tam Özel Mod) Kalibrasyon Motoru:
+    Hibrit Özel Mod (V8.0) Kalibrasyon Motoru:
     2020'den bugüne (yeni kapanan işlemler dahil) tüm geçmişi milisaniyeler içinde tarayarak
-    hissenin en kârlı ve tepe yakalanmalarından koruyan özel Çıkış RSI + Giriş/Soğuma kurallarını belirler.
+    hissenin V-Tipi (Eşzamanlı) mi yoksa W-Tipi (Soğuma Sonrası Sıfırdan Kriter) mi döndüğünü,
+    en kârlı soğuma/alım/bekleme ve çıkış RSI seviyelerini ödül-ceza formülüyle belirler.
     """
     clean_df = df.copy()
     for col in ["Open", "High", "Low", "Close", "Volume"]:
@@ -104,6 +105,7 @@ def calibrate_stock_parameters(
         return {
             "exit_rsi": int(fixed_exit_rsi or 72),
             "reset_rsi": 48.0,
+            "strict_after_reset": False,
             "max_buy_rsi": 60.0,
             "cooldown_bars": 8,
             "no_higher_bars": 0,
@@ -115,13 +117,14 @@ def calibrate_stock_parameters(
     rsi_ser = calculate_rsi(clean_df["Close"], 14)
 
     is_neg = (net_vol < 0).astype(int)
-    neg2 = is_neg.rolling(2).sum().shift(1) == 2
-    neg3 = is_neg.rolling(3).sum().shift(2) == 3
-    cross = (net_vol > nv_avg) & (net_vol.shift(1) <= nv_avg.shift(1))
-    strong = (clean_df["Close"] > clean_df["Open"]) & (
-        clean_df["Close"] > (clean_df["High"] + clean_df["Low"]) / 2.0
-    )
-    base_trig = ((neg2 | neg3) & cross & strong).fillna(False).to_numpy(dtype=bool)
+    neg2_arr = (is_neg.rolling(2).sum().shift(1) == 2).fillna(False).to_numpy(dtype=bool)
+    neg3_arr = (is_neg.rolling(3).sum().shift(2) == 3).fillna(False).to_numpy(dtype=bool)
+    cross_arr = ((net_vol > nv_avg) & (net_vol.shift(1) <= nv_avg.shift(1))).fillna(False).to_numpy(dtype=bool)
+    strong_arr = (
+        (clean_df["Close"] > clean_df["Open"])
+        & (clean_df["Close"] > (clean_df["High"] + clean_df["Low"]) / 2.0)
+    ).fillna(False).to_numpy(dtype=bool)
+    base_trig = (neg2_arr | neg3_arr) & cross_arr & strong_arr
 
     start_ts = pd.Timestamp(start_date_str)
     if clean_df.index.tz is not None:
@@ -141,7 +144,7 @@ def calibrate_stock_parameters(
     else:
         exit_lvl = _compute_best_exit_rsi(close_arr, rsi_arr, base_trig, in_range_loop)
 
-    # 2. Aşama: 1. Mod Hisseye Özel Giriş & Soğuma Kalibrasyonu (140 Kombinasyon)
+    # 2. Aşama: Hibrit (V-Tipi Eşzamanlı vs W-Tipi Sonra Kriter) Giriş & Soğuma Yarışması
     trig_indices = np.where(base_trig & in_range_loop)[0]
     first_valid_idx = int(np.argmax(in_range_loop)) if np.any(in_range_loop) else 1
 
@@ -149,127 +152,155 @@ def calibrate_stock_parameters(
     raw_exit[1:] = in_range_loop[1:] & (rsi_arr[1:] < exit_lvl) & (rsi_arr[:-1] >= exit_lvl)
     exit_indices = np.where(raw_exit)[0]
 
-    reset_opts = [None, 55.0, 52.0, 50.0, 48.0, 45.0, 42.0]
+    reset_opts = [None, 58.0, 55.0, 52.0, 50.0, 48.0, 45.0, 42.0]
     buy_opts = [65.0, 60.0, 58.0, 55.0, 52.0]
     cd_opts = [(0, 0), (8, 0), (10, 0), (10, 35)]
+
+    le_cache = {
+        rst: np.where(rsi_arr <= rst)[0]
+        for rst in reset_opts
+        if rst is not None
+    }
 
     def _search_with_min_trades(min_req: int) -> Optional[Dict[str, Any]]:
         best_score = -1e18
         chosen = None
 
-        for reset_lvl in reset_opts:
-            for max_buy in buy_opts:
-                valid_trigs = trig_indices[rsi_arr[trig_indices] < max_buy]
-                if len(valid_trigs) == 0:
+        for strict_w in (False, True):
+            for reset_lvl in reset_opts:
+                if strict_w and reset_lvl is None:
                     continue
+                le_indices = le_cache.get(reset_lvl) if reset_lvl is not None else None
 
-                for cd, nh in cd_opts:
-                    trades_ret = []
-                    trades_hold = []
-                    trade_spans = []
-                    last_exit_idx = -9999
-                    last_exit_price = 0.0
-                    cap = 1.0
-                    open_entry_idx = -1
-                    open_entry_price = 0.0
-
-                    t_ptr = 0
-                    n_trigs = len(valid_trigs)
-                    while t_ptr < n_trigs:
-                        b_idx = int(valid_trigs[t_ptr])
-                        if b_idx <= last_exit_idx:
-                            t_ptr += 1
-                            continue
-
-                        if cd > 0 and last_exit_idx > 0 and (b_idx - last_exit_idx) <= cd:
-                            t_ptr += 1
-                            continue
-
-                        if nh > 0 and last_exit_idx > 0 and (b_idx - last_exit_idx) <= nh:
-                            if close_arr[b_idx] > last_exit_price:
-                                t_ptr += 1
-                                continue
-
-                        if reset_lvl is not None and last_exit_idx > 0:
-                            if float(np.min(rsi_arr[last_exit_idx : b_idx + 1])) > reset_lvl:
-                                t_ptr += 1
-                                continue
-
-                        ep = close_arr[b_idx] * (1.0 + fee)
-                        ex_pos = int(np.searchsorted(exit_indices, b_idx + 1))
-                        if ex_pos < len(exit_indices):
-                            e_idx = int(exit_indices[ex_pos])
-                            xp = close_arr[e_idx] * (1.0 - fee)
-                            ret = (xp - ep) / ep * 100.0
-                            cap *= 1.0 + ret / 100.0
-                            trades_ret.append(ret)
-                            trades_hold.append(e_idx - b_idx)
-                            trade_spans.append((b_idx, e_idx, ep, cap))
-                            last_exit_idx = e_idx
-                            last_exit_price = close_arr[e_idx]
-                            t_ptr += 1
-                        else:
-                            open_entry_idx = b_idx
-                            open_entry_price = ep
-                            break
-
-                    if len(trades_ret) < min_req:
+                for max_buy in buy_opts:
+                    valid_trigs = trig_indices[rsi_arr[trig_indices] < max_buy]
+                    if len(valid_trigs) == 0:
                         continue
 
-                    realized_ret = (cap - 1.0) * 100.0
-                    if open_entry_idx >= 0:
-                        final_eq = cap * (close_arr[-1] / (open_entry_price / (1.0 + fee)))
-                        cur_open_ret = (close_arr[-1] - open_entry_price) / open_entry_price * 100.0
-                        open_hold = (n - 1) - open_entry_idx
-                    else:
-                        final_eq = cap
-                        cur_open_ret = 0.0
-                        open_hold = 0
-                    mtm_ret = (final_eq - 1.0) * 100.0
+                    for cd, nh in cd_opts:
+                        trades_ret = []
+                        trades_hold = []
+                        trade_spans = []
+                        last_exit_idx = -9999
+                        last_exit_price = 0.0
+                        cap = 1.0
+                        open_entry_idx = -1
+                        open_entry_price = 0.0
 
-                    eq_len = max(1, n - first_valid_idx)
-                    eq_arr = np.full(eq_len, 1.0, dtype=float)
-                    cur_c = 1.0
-                    last_end = 0
-                    for b_i, e_i, ep_val, cap_after in trade_spans:
-                        s_rel = b_i - first_valid_idx
-                        e_rel = e_i - first_valid_idx
-                        if s_rel > last_end:
-                            eq_arr[last_end:s_rel] = cur_c
-                        raw_ep = ep_val / (1.0 + fee)
-                        eq_arr[s_rel : e_rel + 1] = cur_c * (close_arr[b_i : e_i + 1] / raw_ep)
-                        eq_arr[e_rel] = cap_after
-                        cur_c = cap_after
-                        last_end = e_rel + 1
-                    if open_entry_idx >= 0:
-                        s_rel = open_entry_idx - first_valid_idx
-                        if s_rel > last_end:
-                            eq_arr[last_end:s_rel] = cur_c
-                        raw_ep = open_entry_price / (1.0 + fee)
-                        eq_arr[s_rel:] = cur_c * (close_arr[open_entry_idx:] / raw_ep)
-                    elif last_end < eq_len:
-                        eq_arr[last_end:] = cur_c
+                        t_ptr = 0
+                        n_trigs = len(valid_trigs)
+                        while t_ptr < n_trigs:
+                            b_idx = int(valid_trigs[t_ptr])
+                            if b_idx <= last_exit_idx:
+                                t_ptr += 1
+                                continue
 
-                    cummax = np.maximum.accumulate(eq_arr)
-                    mdd = float(((eq_arr - cummax) / cummax).min() * 100.0) if eq_len else 0.0
+                            if cd > 0 and last_exit_idx > 0 and (b_idx - last_exit_idx) <= cd:
+                                t_ptr += 1
+                                continue
 
-                    losses = sum(1 for r in trades_ret if r <= 0)
-                    stuck = sum(1 for r, h in zip(trades_ret, trades_hold) if h > 65 and r < 5.0)
-                    open_bad = 1 if (open_entry_idx >= 0 and open_hold > 50 and cur_open_ret < -10.0) else 0
+                            if nh > 0 and last_exit_idx > 0 and (b_idx - last_exit_idx) <= nh:
+                                if close_arr[b_idx] > last_exit_price:
+                                    t_ptr += 1
+                                    continue
 
-                    penalty = (losses * 45.0) + (stuck * 60.0) + (open_bad * 120.0) + (abs(mdd) * 3.0)
-                    score = (0.60 * mtm_ret + 0.40 * realized_ret) - penalty
+                            if reset_lvl is not None and last_exit_idx > 0:
+                                if not strict_w:
+                                    # V-Tipi: last_exit_idx..b_idx arasında RSI <= reset_lvl görüldü mü?
+                                    pos_le = int(np.searchsorted(le_indices, last_exit_idx))
+                                    if pos_le >= len(le_indices) or int(le_indices[pos_le]) > b_idx:
+                                        t_ptr += 1
+                                        continue
+                                else:
+                                    # W-Tipi: Önce SAT sonrası RSI <= reset_lvl görülür (cool_idx),
+                                    # ardından 2-3 negatif hacim mumu cool_idx gününden SONRA sıfırdan oluşmalıdır!
+                                    pos_le = int(np.searchsorted(le_indices, last_exit_idx + 1))
+                                    if pos_le >= len(le_indices):
+                                        t_ptr += 1
+                                        continue
+                                    cool_idx = int(le_indices[pos_le])
+                                    s_neg2 = bool(neg2_arr[b_idx]) and ((b_idx - 2) > cool_idx)
+                                    s_neg3 = bool(neg3_arr[b_idx]) and ((b_idx - 4) > cool_idx)
+                                    if not (s_neg2 or s_neg3):
+                                        t_ptr += 1
+                                        continue
 
-                    if score > best_score:
-                        best_score = score
-                        chosen = {
-                            "exit_rsi": int(exit_lvl),
-                            "reset_rsi": float(reset_lvl) if reset_lvl is not None else None,
-                            "max_buy_rsi": float(max_buy),
-                            "cooldown_bars": int(cd),
-                            "no_higher_bars": int(nh),
-                            "calibrated_at": datetime.date.today().isoformat(),
-                        }
+                            ep = close_arr[b_idx] * (1.0 + fee)
+                            ex_pos = int(np.searchsorted(exit_indices, b_idx + 1))
+                            if ex_pos < len(exit_indices):
+                                e_idx = int(exit_indices[ex_pos])
+                                xp = close_arr[e_idx] * (1.0 - fee)
+                                ret = (xp - ep) / ep * 100.0
+                                cap *= 1.0 + ret / 100.0
+                                trades_ret.append(ret)
+                                trades_hold.append(e_idx - b_idx)
+                                trade_spans.append((b_idx, e_idx, ep, cap))
+                                last_exit_idx = e_idx
+                                last_exit_price = close_arr[e_idx]
+                                t_ptr += 1
+                            else:
+                                open_entry_idx = b_idx
+                                open_entry_price = ep
+                                break
+
+                        if len(trades_ret) < min_req:
+                            continue
+
+                        realized_ret = (cap - 1.0) * 100.0
+                        if open_entry_idx >= 0:
+                            final_eq = cap * (close_arr[-1] / (open_entry_price / (1.0 + fee)))
+                            cur_open_ret = (close_arr[-1] - open_entry_price) / open_entry_price * 100.0
+                            open_hold = (n - 1) - open_entry_idx
+                        else:
+                            final_eq = cap
+                            cur_open_ret = 0.0
+                            open_hold = 0
+                        mtm_ret = (final_eq - 1.0) * 100.0
+
+                        eq_len = max(1, n - first_valid_idx)
+                        eq_arr = np.full(eq_len, 1.0, dtype=float)
+                        cur_c = 1.0
+                        last_end = 0
+                        for b_i, e_i, ep_val, cap_after in trade_spans:
+                            s_rel = b_i - first_valid_idx
+                            e_rel = e_i - first_valid_idx
+                            if s_rel > last_end:
+                                eq_arr[last_end:s_rel] = cur_c
+                            raw_ep = ep_val / (1.0 + fee)
+                            eq_arr[s_rel : e_rel + 1] = cur_c * (close_arr[b_i : e_i + 1] / raw_ep)
+                            eq_arr[e_rel] = cap_after
+                            cur_c = cap_after
+                            last_end = e_rel + 1
+                        if open_entry_idx >= 0:
+                            s_rel = open_entry_idx - first_valid_idx
+                            if s_rel > last_end:
+                                eq_arr[last_end:s_rel] = cur_c
+                            raw_ep = open_entry_price / (1.0 + fee)
+                            eq_arr[s_rel:] = cur_c * (close_arr[open_entry_idx:] / raw_ep)
+                        elif last_end < eq_len:
+                            eq_arr[last_end:] = cur_c
+
+                        cummax = np.maximum.accumulate(eq_arr)
+                        mdd = float(((eq_arr - cummax) / cummax).min() * 100.0) if eq_len else 0.0
+
+                        losses = sum(1 for r in trades_ret if r <= 0)
+                        stuck = sum(1 for r, h in zip(trades_ret, trades_hold) if h > 65 and r < 5.0)
+                        open_bad = 1 if (open_entry_idx >= 0 and open_hold > 50 and cur_open_ret < -10.0) else 0
+
+                        penalty = (losses * 45.0) + (stuck * 60.0) + (open_bad * 120.0) + (abs(mdd) * 3.0)
+                        score = (0.60 * mtm_ret + 0.40 * realized_ret) - penalty
+
+                        if score > best_score:
+                            best_score = score
+                            chosen = {
+                                "exit_rsi": int(exit_lvl),
+                                "reset_rsi": float(reset_lvl) if reset_lvl is not None else None,
+                                "strict_after_reset": bool(strict_w) if reset_lvl is not None else False,
+                                "max_buy_rsi": float(max_buy),
+                                "cooldown_bars": int(cd),
+                                "no_higher_bars": int(nh),
+                                "calibrated_at": datetime.date.today().isoformat(),
+                            }
         return chosen
 
     primary_min = 4 if (n - first_valid_idx) > 400 else 2
@@ -280,6 +311,7 @@ def calibrate_stock_parameters(
         best_params = {
             "exit_rsi": int(exit_lvl),
             "reset_rsi": None,
+            "strict_after_reset": False,
             "max_buy_rsi": 65.0,
             "cooldown_bars": 0,
             "no_higher_bars": 0,
@@ -291,8 +323,8 @@ def calibrate_stock_parameters(
 def recalibrate_and_save_stock(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
     """
     Bir işlem kapandığında (SAT) veya aylık periyodik bakımda çağrılır:
-    Hissenin tüm geçmişini + yeni kapanan işlemini değerlendirip hem Giriş/Soğuma
-    hem Çıkış RSI seviyelerini yeniden hesaplar ve optimal_params.json dosyasına yazar.
+    Hissenin tüm geçmişini + yeni kapanan işlemini değerlendirip V/W tipini,
+    Giriş/Soğuma ve Çıkış RSI seviyelerini yeniden hesaplar ve optimal_params.json dosyasına yazar.
     """
     clean = symbol.replace(".IS", "").strip().upper()
     new_params = calibrate_stock_parameters(df, fixed_exit_rsi=None)
@@ -311,7 +343,7 @@ def run_strategy(
     symbol: str = None,
 ) -> pd.DataFrame:
     """
-    V7.0 (1. Mod) Hisseye Özel Giriş/Soğuma + Çıkış RSI stratejisini çalıştırır.
+    V8.0 Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Giriş-Soğuma + Çıkış RSI) stratejisini çalıştırır.
     """
     if config is None:
         config = StrategyConfig()
@@ -337,13 +369,11 @@ def run_strategy(
         in_date_range = pd.Series(True, index=df.index)
     df["In_Date_Range"] = in_date_range
 
-    # 3. Baz Hacim Akışı Dönüş Koşulu
+    # 3. Baz Hacim Akışı Dönüş Koşulları
     is_neg = (df["Net_Volume"] < 0).astype(int)
     neg3_prev = is_neg.rolling(window=3).sum().shift(2) == 3
-    if config.use_fast_2bar_neg_flow:
-        neg_direct = is_neg.rolling(window=2).sum().shift(1) == 2
-    else:
-        neg_direct = is_neg.rolling(window=3).sum().shift(1) == 3
+    w_dir = 2 if config.use_fast_2bar_neg_flow else 3
+    neg_direct = is_neg.rolling(window=w_dir).sum().shift(1) == w_dir
 
     crossover = (df["Net_Volume"] > df["NV_Avg"]) & (
         df["Net_Volume"].shift(1) <= df["NV_Avg"].shift(1)
@@ -353,7 +383,7 @@ def run_strategy(
     )
     base_trigger = (neg_direct | neg3_prev) & crossover & strong_close
 
-    # 4. Hisseye Özel Parametreleri Çözümle (Çıkış RSI + Giriş/Soğuma Kuralları)
+    # 4. Hisseye Özel Hibrit Parametreleri Çözümle (Çıkış RSI + V/W Giriş-Soğuma Kuralları)
     if symbol:
         clean_sym = symbol.replace(".IS", "").strip().upper()
         all_p = load_optimal_params()
@@ -371,22 +401,27 @@ def run_strategy(
 
     if config.use_per_stock_entry_cooldown:
         reset_rsi = stock_params.get("reset_rsi")
+        strict_after_reset = bool(stock_params.get("strict_after_reset", False)) if reset_rsi is not None else False
         max_buy_rsi = float(stock_params.get("max_buy_rsi", config.rsi_max_buy))
         cooldown_bars = int(stock_params.get("cooldown_bars", 0))
         no_higher_bars = int(stock_params.get("no_higher_bars", 0))
     else:
         reset_rsi = None
+        strict_after_reset = False
         max_buy_rsi = float(config.rsi_max_buy)
         cooldown_bars = 0
         no_higher_bars = 0
 
     df["Optimal_RSI_Exit"] = exit_rsi_level
     df["Optimal_Reset_RSI"] = float(reset_rsi) if reset_rsi is not None else np.nan
+    df["Optimal_Strict_Reset"] = bool(strict_after_reset)
     df["Optimal_Max_Buy_RSI"] = max_buy_rsi
     df["Optimal_Cooldown_Bars"] = cooldown_bars
     df["Optimal_No_Higher_Bars"] = no_higher_bars
 
     date_ok_arr = np.asarray(in_date_range, dtype=bool)
+    neg_dir_arr = neg_direct.fillna(False).to_numpy(dtype=bool)
+    neg3_prev_arr = neg3_prev.fillna(False).to_numpy(dtype=bool)
     base_trig_arr = base_trigger.fillna(False).to_numpy(dtype=bool)
     close_arr = df["Close"].to_numpy(dtype=float)
     rsi_arr = df["RSI"].to_numpy(dtype=float)
@@ -395,7 +430,7 @@ def run_strategy(
     rsi_exit_arr = rsi_exit.fillna(False).to_numpy(dtype=bool)
     df["Raw_Exit_Condition"] = rsi_exit & in_date_range
 
-    # 5. Tekil Hisse Pozisyon Simülasyonu & Portföy Aday Sinyal Motoru (1. Mod Soğuma Korumalı)
+    # 5. Tekil Hisse Simülasyonu & 5 Hisselik Portföy Aday Sinyal Motoru (V-Tipi & W-Tipi Hibrit)
     n = len(df)
     positions = np.zeros(n, dtype=int)
     long_entries = np.zeros(n, dtype=bool)
@@ -407,33 +442,41 @@ def run_strategy(
     last_exit_idx = -9999
     last_exit_price = 0.0
     rsi_reset_ok = True
+    cool_idx = 0
 
-    # 5 Hisselik Sepet için Tepe Sonrası Soğuma Takibi (sepette olmasa bile zirve kırılımından hemen sonra almaz)
+    # 5 Hisselik Sepet için Tepe Sonrası V/W Soğuma Takibi
     peak_exit_idx = -9999
     peak_exit_price = 0.0
     peak_reset_ok = True
+    peak_cool_idx = 0
 
     for i in range(n):
         if i == 0 or not bool(date_ok_arr[i]):
             positions[i] = current_position
             continue
 
+        # Soğuma durumu güncellemeleri
         if reset_rsi is not None:
-            if rsi_arr[i] <= reset_rsi or rsi_arr[i - 1] <= reset_rsi:
-                rsi_reset_ok = True
-                peak_reset_ok = True
+            if not strict_after_reset:
+                if rsi_arr[i] <= reset_rsi or rsi_arr[i - 1] <= reset_rsi:
+                    rsi_reset_ok = True
+                    peak_reset_ok = True
+            else:
+                if current_position == 0 and cool_idx < 0 and rsi_arr[i] <= reset_rsi:
+                    cool_idx = i
+                if peak_cool_idx < 0 and rsi_arr[i] <= reset_rsi:
+                    peak_cool_idx = i
 
-        # A) 5 Hisselik Portföy Aday Sinyali (Tepe Korumalı Raw_Long_Condition)
+        # A) 5 Hisselik Portföy Aday Sinyali (Tepe Korumalı Hibrit Raw_Long_Condition)
         if bool(rsi_exit_arr[i]):
             peak_exit_idx = i
             peak_exit_price = float(close_arr[i])
             if reset_rsi is not None:
                 peak_reset_ok = False
+                peak_cool_idx = -1
         else:
             p_cond = bool(base_trig_arr[i]) and (rsi_arr[i] < max_buy_rsi)
             if p_cond and cooldown_bars > 0 and (i - peak_exit_idx) <= cooldown_bars:
-                p_cond = False
-            if p_cond and (reset_rsi is not None) and (not peak_reset_ok):
                 p_cond = False
             if (
                 p_cond
@@ -443,14 +486,24 @@ def run_strategy(
                 and close_arr[i] > peak_exit_price
             ):
                 p_cond = False
+            if p_cond and (reset_rsi is not None):
+                if not strict_after_reset:
+                    if not peak_reset_ok:
+                        p_cond = False
+                else:
+                    if peak_cool_idx < 0:
+                        p_cond = False
+                    elif peak_exit_idx > 0:
+                        p_neg_d = bool(neg_dir_arr[i]) and ((i - w_dir) > peak_cool_idx)
+                        p_neg_3 = bool(neg3_prev_arr[i]) and ((i - 4) > peak_cool_idx)
+                        if not (p_neg_d or p_neg_3):
+                            p_cond = False
             portfolio_long_cond[i] = p_cond
 
         # B) Tekil Hisse Gerçek AL / SAT Durum Makinesi
         if current_position == 0:
             cond = bool(base_trig_arr[i]) and (rsi_arr[i] < max_buy_rsi)
             if cond and cooldown_bars > 0 and (i - last_exit_idx) <= cooldown_bars:
-                cond = False
-            if cond and (reset_rsi is not None) and (not rsi_reset_ok):
                 cond = False
             if (
                 cond
@@ -460,6 +513,18 @@ def run_strategy(
                 and close_arr[i] > last_exit_price
             ):
                 cond = False
+            if cond and (reset_rsi is not None):
+                if not strict_after_reset:
+                    if not rsi_reset_ok:
+                        cond = False
+                else:
+                    if cool_idx < 0:
+                        cond = False
+                    elif last_exit_idx > 0:
+                        s_neg_d = bool(neg_dir_arr[i]) and ((i - w_dir) > cool_idx)
+                        s_neg_3 = bool(neg3_prev_arr[i]) and ((i - 4) > cool_idx)
+                        if not (s_neg_d or s_neg_3):
+                            cond = False
 
             if cond:
                 current_position = 1
@@ -472,6 +537,7 @@ def run_strategy(
                 last_exit_price = float(close_arr[i])
                 if reset_rsi is not None:
                     rsi_reset_ok = False
+                    cool_idx = -1
 
         positions[i] = current_position
 

@@ -1,7 +1,7 @@
 """
-Strateji, Hisseye Özel Giriş/Soğuma/Çıkış RSI (1. Mod) ve Portföy Konfigürasyonu (V7.0)
-- Her hisse kendi karakterine özel Giriş Üst RSI, SAT Sonrası Soğuma (Reset RSI / Bekleme) ve Çıkış RSI seviyelerini kullanır.
-- Kapanan işlemlerden sonra yeni işlem verisiyle optimal_params.json otomatik güncellenir.
+Strateji, Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma + Özel Çıkış RSI) ve Portföy Konfigürasyonu (V8.0)
+- Her hisse kendi tahta karakterine göre V-Tipi (Eşzamanlı Soğuma), W-Tipi (Önce RSI Soğusun -> Sonra Kriter Ara) veya Trend Filtreli giriş kuralını ve Özel Çıkış RSI hedefini kullanır.
+- Kapanan işlemlerden (SAT) sonra yeni işlem verisiyle optimal_params.json otomatik güncellenir.
 """
 import os
 import json
@@ -9,6 +9,7 @@ import datetime
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
+STRATEGY_VERSION = "V8_HYBRID"
 OPTIMAL_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "optimal_params.json")
 
 # Yedek (Fallback) 2020+ Hisse Bazlı En Kârlı Çıkış RSI Haritası
@@ -37,7 +38,7 @@ OPTIMAL_RSI_MAP = {
 
 def load_optimal_params() -> Dict[str, Dict[str, Any]]:
     """
-    Hisse bazlı özel giriş/soğuma/çıkış parametre tablosunu (optimal_params.json) okur.
+    Hisse bazlı hibrit giriş/soğuma/çıkış parametre tablosunu (optimal_params.json) okur.
     """
     if os.path.exists(OPTIMAL_PARAMS_FILE):
         try:
@@ -52,7 +53,7 @@ def load_optimal_params() -> Dict[str, Dict[str, Any]]:
 
 def save_optimal_params(params_map: Dict[str, Dict[str, Any]]) -> None:
     """
-    Güncellenen hisse bazlı özel RSI parametrelerini optimal_params.json dosyasına kaydeder.
+    Güncellenen hisse bazlı hibrit RSI parametrelerini optimal_params.json dosyasına kaydeder.
     """
     sorted_map = {k: params_map[k] for k in sorted(params_map.keys())}
     with open(OPTIMAL_PARAMS_FILE, "w", encoding="utf-8") as f:
@@ -61,9 +62,10 @@ def save_optimal_params(params_map: Dict[str, Dict[str, Any]]) -> None:
 
 def get_stock_params(symbol: Optional[str] = None, default_exit: int = 72) -> Dict[str, Any]:
     """
-    Belirtilen hissenin güncel özel parametrelerini döndürür:
+    Belirtilen hissenin güncel hibrit özel parametrelerini döndürür:
     - exit_rsi: Özel satış hedefi (68-78)
-    - reset_rsi: SAT sonrası yeni AL için RSI'ın inmesi gereken soğuma seviyesi (veya None)
+    - reset_rsi: SAT sonrası yeni AL için RSI soğuma seviyesi (veya None)
+    - strict_after_reset: True ise W-Tipi (önce RSI soğusun, kriterleri ondan sonra ara); False ise V-Tipi (eşzamanlı)
     - max_buy_rsi: Alım için izin verilen en yüksek RSI sınırı
     - cooldown_bars: SAT sonrası minimum bekleme bar sayısı
     - no_higher_bars: SAT fiyatından daha pahalıya almama süresi (bar)
@@ -72,6 +74,7 @@ def get_stock_params(symbol: Optional[str] = None, default_exit: int = 72) -> Di
         return {
             "exit_rsi": int(default_exit),
             "reset_rsi": None,
+            "strict_after_reset": False,
             "max_buy_rsi": 65.0,
             "cooldown_bars": 0,
             "no_higher_bars": 0,
@@ -86,6 +89,7 @@ def get_stock_params(symbol: Optional[str] = None, default_exit: int = 72) -> Di
         return {
             "exit_rsi": int(raw.get("exit_rsi", OPTIMAL_RSI_MAP.get(clean, default_exit))),
             "reset_rsi": float(rst) if rst is not None else None,
+            "strict_after_reset": bool(raw.get("strict_after_reset", False)) if rst is not None else False,
             "max_buy_rsi": float(raw.get("max_buy_rsi", 65.0)),
             "cooldown_bars": int(raw.get("cooldown_bars", 0)),
             "no_higher_bars": int(raw.get("no_higher_bars", 0)),
@@ -95,6 +99,7 @@ def get_stock_params(symbol: Optional[str] = None, default_exit: int = 72) -> Di
     return {
         "exit_rsi": int(OPTIMAL_RSI_MAP.get(clean, default_exit)),
         "reset_rsi": None,
+        "strict_after_reset": False,
         "max_buy_rsi": 65.0,
         "cooldown_bars": 0,
         "no_higher_bars": 0,
@@ -104,16 +109,21 @@ def get_stock_params(symbol: Optional[str] = None, default_exit: int = 72) -> Di
 
 def format_stock_entry_rule(params: Dict[str, Any]) -> str:
     """
-    Hissenin özel giriş ve soğuma kuralını okunabilir Türkçe metne çevirir.
+    Hissenin V-Tipi / W-Tipi hibrit giriş ve soğuma kuralını okunabilir Türkçe metne çevirir.
     """
-    parts = []
     rst = params.get("reset_rsi")
+    strict_w = bool(params.get("strict_after_reset", False))
     max_buy = float(params.get("max_buy_rsi", 65.0))
     cd = int(params.get("cooldown_bars", 0))
     nh = int(params.get("no_higher_bars", 0))
 
+    parts = []
     if rst is not None:
-        parts.append(f"SAT sonrası RSI ≤ {int(rst)} Soğuma")
+        if strict_w:
+            parts.append(f"W-Tipi (Önce RSI ≤ {int(rst)} ➔ Sonra Kriter)")
+        else:
+            parts.append(f"V-Tipi (RSI ≤ {int(rst)} Soğuma + İlk Dönüş)")
+
     parts.append(f"Alım RSI < {int(max_buy)}")
     if cd > 0:
         parts.append(f"{cd}g Bekle")
@@ -122,6 +132,8 @@ def format_stock_entry_rule(params: Dict[str, Any]) -> str:
 
     if rst is None and max_buy >= 65.0 and cd == 0 and nh == 0:
         return "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)"
+    if rst is None:
+        return "Trend Filtreli (" + " | ".join(parts) + ")"
     return " | ".join(parts)
 
 
@@ -136,12 +148,12 @@ def get_optimal_rsi(symbol: Optional[str] = None, default: int = 72) -> int:
 
 @dataclass
 class StrategyConfig:
-    # V7.0 1. Mod: Hisseye Özel Giriş/Soğuma + Çıkış RSI Strateji Parametreleri
+    # V8.0 Hibrit Özel Mod: Hisseye Özel V/W Giriş-Soğuma + Çıkış RSI Strateji Parametreleri
     nv_avg_length: int = 5                        # Net Hacim Ortalaması Periyodu (SMA 5)
     rsi_length: int = 14                          # Wilder RSI Periyodu
     rsi_max_buy: float = 65.0                     # Manuel mod seçilirse kullanılacak üst alım RSI sınırı
     use_per_stock_optimal_rsi: bool = True        # Hisse bazlı özel optimum Çıkış RSI aktif
-    use_per_stock_entry_cooldown: bool = True     # 1. Mod: Hisse bazlı özel Giriş & Soğuma RSI aktif
+    use_per_stock_entry_cooldown: bool = True     # Hibrit Mod: Hisse bazlı V-Tipi / W-Tipi Giriş & Soğuma aktif
     rsi_overbought: int = 72                      # Manuel mod seçilirse kullanılacak sabit çıkış RSI seviyesi
     use_fast_2bar_neg_flow: bool = True           # 2 ve 3 bar negatif akış dönüşlerini yakalar
 

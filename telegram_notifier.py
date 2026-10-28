@@ -1,7 +1,7 @@
 """
-Telegram Bildirim Modülü (V7.0 - BIST 30 | 1. Mod Özel Giriş/Soğuma & Çıkış RSI | Maks. 5 Hisse Portföy)
+Telegram Bildirim Modülü (V8.0 - BIST 30 | Hibrit Özel Mod V/W Soğuma & Çıkış RSI | Maks. 5 Hisse Portföy)
 - Sadece BIST 30 ve 5 hisse kontenjanına göre tek bir toplu günlük portföy raporu gönderir.
-- SAT gerçekleştiğinde yeni kapanan işlem verisiyle güncellenen özel RSI seviyelerini de raporlar.
+- SAT gerçekleştiğinde yeni kapanan işlem verisiyle güncellenen V/W tipini ve özel RSI seviyelerini de raporlar.
 """
 import os
 from typing import List, Dict, Any
@@ -66,7 +66,7 @@ def format_bist30_daily_report(
     allocation_pct: float = 10.0,
 ) -> str:
     """
-    BIST 30 + Maksimum 5 Hisse (%10 Alım) + 1. Mod Özel Giriş/Soğuma/Çıkış RSI kurallarına göre
+    BIST 30 + Maksimum 5 Hisse (%10 Alım) + Hibrit Özel Mod (V/W Soğuma & Çıkış RSI) kurallarına göre
     tek toplu Telegram mesajını oluşturur.
     """
     skipped_list = skipped_list or []
@@ -78,7 +78,7 @@ def format_bist30_daily_report(
 
     lines = [
         "📊 <b>BIST 30 PORTFÖY & SİNYAL RAPORU</b>",
-        f"📅 <b>Tarih:</b> {date_str} | <b>Mod:</b> 1. Mod (Özel Giriş/Soğuma & Çıkış RSI)",
+        f"📅 <b>Tarih:</b> {date_str} | <b>Mod:</b> Hibrit Özel Mod (V/W Soğuma & Çıkış RSI)",
         "━━━━━━━━━━━━━━━━━━━━",
     ]
 
@@ -126,7 +126,7 @@ def format_bist30_daily_report(
                     f"  ↳ Kilitli Çıkış Hedefi: <b>RSI {b['target_rsi']}</b> | Başarı: {wr_txt} (Ort. Kâr: {aw_txt})"
                 )
                 if rule_txt:
-                    lines.append(f"  ↳ 🛡️ <i>Hisseye Özel Filtre: {rule_txt}</i>")
+                    lines.append(f"  ↳ 🛡️ <i>Hibrit Filtre: {rule_txt}</i>")
 
         if skipped_list:
             skipped_names = ", ".join(f"#{x['clean_symbol']} (RSI {x['rsi']:.1f})" for x in skipped_list)
@@ -192,14 +192,14 @@ def send_bist30_daily_report(
 
 def test_telegram_connection(token: str = None, chat_id: str = None) -> bool:
     """
-    Telegram ayarlarını V7.0 (1. Mod Hisseye Özel Giriş/Soğuma & Otomatik Öğrenme) formatıyla test eder.
+    Telegram ayarlarını V8.0 (Hibrit Özel Mod V/W Soğuma & Otomatik Öğrenme) formatıyla test eder.
     """
     msg = (
-        "🤖 <b>BIST 30 1. MOD ÖZEL OPTİMUM RSI PORTFÖY BOTU AKTİF!</b>\n"
+        "🤖 <b>BIST 30 HİBRİT ÖZEL MOD (V8.0) PORTFÖY BOTU AKTİF!</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "✅ <b>Kapsam:</b> Sadece BIST 30 Şirketleri\n"
-        "✅ <b>Strateji:</b> 1. Mod — Hisseye Özel Giriş/Soğuma + Çıkış RSI\n"
-        "✅ <b>Canlı Öğrenme:</b> Her kapanan işlem (SAT) sonrası seviyeler otomatik güncellenir\n"
+        "✅ <b>Strateji:</b> Hibrit Özel Mod — Hisseye Göre V-Tipi / W-Tipi Soğuma + Özel Çıkış RSI\n"
+        "✅ <b>Canlı Öğrenme:</b> Her kapanan işlem (SAT) sonrası V/W tipi ve RSI seviyeleri otomatik güncellenir\n"
         "✅ <b>Portföy Kuralı:</b> Maksimum 5 Açık Hisse (%10 Pay / Hisse)"
     )
     return send_telegram_message(msg, token=token, chat_id=chat_id)

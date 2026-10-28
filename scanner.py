@@ -1,7 +1,7 @@
 """
-BIST 30 Günlük Tarama, 1. Mod Hisseye Özel Giriş/Soğuma & Otomatik Öğrenen 5 Hisse Portföy Modülü (Scanner V7.0)
+BIST 30 Günlük Tarama, Hibrit Özel Mod (V/W Soğuma) & Otomatik Öğrenen 5 Hisse Portföy Modülü (Scanner V8.0)
 - Sadece BIST 30 şirketlerini tarar.
-- Her hisse için özel Giriş Üst RSI, SAT Sonrası Soğuma (Reset RSI / Bekleme) ve Özel Çıkış RSI kurallarını uygular.
+- Her hisse için kendi karakterine uygun V-Tipi (Eşzamanlı) veya W-Tipi (Soğuma Sonrası Kriter Arama) soğuma ve Özel Çıkış RSI kurallarını uygular.
 - İşlem açıkken hedef RSI kilitli kalır; işlem SAT ile kapandığı anda yeni işlem verisi eklenerek optimal_params.json otomatik güncellenir.
 - Ayrıca her yeni ayın ilk işlem gününde açık olmayan BIST 30 hisselerinin özel seviyeleri güncel verilerle tazelenir.
 """
@@ -89,7 +89,7 @@ def scan_symbols(
     update_portfolio: bool = True,
 ) -> dict:
     """
-    Sadece BIST 30 şirketlerini 1. Mod (Hisseye Özel Giriş/Soğuma + Çıkış RSI) stratejisiyle tarar,
+    Sadece BIST 30 şirketlerini Hibrit Özel Mod (V/W Giriş-Soğuma + Çıkış RSI) stratejisiyle tarar,
     5 hisselik portföy sınırına göre AL/SAT kararlarını üretir, kapanan işlemlerle seviyeleri günceller
     ve Telegram'a tek toplu rapor iletir.
     """
@@ -104,10 +104,10 @@ def scan_symbols(
     max_positions = int(state.get("max_positions", PORTFOLIO_CONFIG.get("max_positions", 5)))
     allocation_pct = float(state.get("allocation_pct", PORTFOLIO_CONFIG.get("allocation_pct", 10.0)))
 
-    print("\n" + "=" * 74)
-    print(f"  🔍 BIST 30 1. MOD ÖZEL GİRİŞ/SOĞUMA/ÇIKIŞ RSI TARAMASI ({len(targets)} Şirket)")
+    print("\n" + "=" * 76)
+    print(f"  🔍 BIST 30 HİBRİT ÖZEL MOD (V/W SOĞUMA & ÇIKIŞ RSI) TARAMASI ({len(targets)} Şirket)")
     print(f"  📌 Portföy Kuralı: Maksimum {max_positions} Açık Hisse (Her Alım %{allocation_pct:.0f})")
-    print("=" * 74)
+    print("=" * 76)
 
     raw_dfs = {}
     latest_bar_date = None
@@ -132,7 +132,7 @@ def scan_symbols(
     current_month = latest_bar_date[:7]
     open_clean_now = {p["clean_symbol"] for p in state.get("open_positions", [])}
     if update_portfolio and state.get("last_calibrated_month") != current_month:
-        print(f"  🔄 Yeni ay ({current_month}) periyodik kalibrasyonu çalıştırılıyor...")
+        print(f"  🔄 Yeni ay ({current_month}) periyodik Hibrit Mod kalibrasyonu çalıştırılıyor...")
         for sym, df_raw in raw_dfs.items():
             csym = sym.replace(".IS", "").strip().upper()
             if csym not in open_clean_now:
@@ -203,14 +203,13 @@ def scan_symbols(
             t_rsi = int(pos.get("target_rsi", snap["target_rsi"]))
             ret_pct = ((cur_p - ep) / ep * 100.0) if ep > 0 else 0.0
 
-            # Pozisyon açıkken giriş anındaki kilitli t_rsi aşağı kırıldıysa SAT!
             locked_exit_hit = (snap["date_iso"] == latest_bar_date) and (cur_rsi < t_rsi and prev_rsi >= t_rsi)
 
             if locked_exit_hit:
-                # İŞLEM KAPANDI -> Yeni al-sat verisini dahil ederek hissenin giriş/soğuma ve çıkış RSI seviyelerini otomatik güncelle!
+                # İŞLEM KAPANDI -> Yeni al-sat verisini dahil ederek hissenin V/W tipini ve RSI seviyelerini otomatik güncelle!
                 recal_res = recalibrate_and_save_stock(snap["symbol"], snap["df_raw"])
                 print(
-                    f"  🔄 [{csym}] Kapanan işlem verisi eklendi -> Yeni Özel Seviyeler: "
+                    f"  🔄 [{csym}] Kapanan işlem verisi eklendi -> Yeni Hibrit Seviyeler: "
                     f"Çıkış RSI {recal_res['exit_rsi']} | {recal_res['rule_summary']}"
                 )
 
@@ -233,7 +232,7 @@ def scan_symbols(
                     {
                         **sell_item,
                         "exit_date": latest_bar_date,
-                        "reason": f"Özel Optimum RSI {t_rsi} Kırılımı (+Seviye Güncellendi)",
+                        "reason": f"Özel Optimum RSI {t_rsi} Kırılımı (+Hibrit Seviye Güncellendi)",
                     }
                 )
             else:
@@ -243,7 +242,7 @@ def scan_symbols(
                 pos["pnl_pct"] = round(ret_pct, 2)
                 still_open.append(pos)
 
-        # 2. ADIM: Boş kontenjan varsa soğuma filtresini geçmiş BIST 30 AL sinyallerinden en düşük RSI'lı olanları seç
+        # 2. ADIM: Boş kontenjan varsa V/W soğuma filtresini geçmiş BIST 30 AL sinyallerinden en düşük RSI'lı olanları seç
         open_syms_set = {p["clean_symbol"] for p in still_open}
         available_slots = max(0, max_positions - len(still_open))
 
@@ -340,9 +339,9 @@ def scan_symbols(
         except Exception:
             pass
 
-    print("=" * 74)
-    print(f"  📊 BIST 30 GÜNLÜK RAPOR ({display_date})")
-    print("=" * 74)
+    print("=" * 76)
+    print(f"  📊 BIST 30 HİBRİT MOD GÜNLÜK RAPOR ({display_date})")
+    print("=" * 76)
     if sold_today:
         print(f"  🔴 Sepetten SAT Verenler ({len(sold_today)}):")
         for s in sold_today:
@@ -360,7 +359,7 @@ def scan_symbols(
     if not sold_today and not bought_today:
         print("  ⚪ Bugün portföy için yeni bir AL veya SAT sinyali oluşmamıştır.")
     print(f"  💼 Aktif Açık Pozisyon: {len(state.get('open_positions', []))}/{max_positions}")
-    print("=" * 74 + "\n")
+    print("=" * 76 + "\n")
 
     if send_telegram:
         sent_history = _load_sent_history()
@@ -394,7 +393,7 @@ def scan_symbols(
                 "Fiyat (TL)": round(s["price"], 2),
                 "Güncel RSI": round(s["rsi"], 1),
                 "Özel Çıkış Hedefi": f"RSI {s['target_rsi']}",
-                "Özel Giriş / Soğuma Kuralı": s["entry_rule"],
+                "Hibrit Giriş / Soğuma Kuralı (V/W)": s["entry_rule"],
                 "2020+ Getiri (%)": round(s["total_return_pct"], 1),
                 "Kazanma (%)": round(s["win_rate"], 1),
                 "Ham Sinyal": "🟢 AL" if s["raw_long"] else ("🔴 RSI Kırılımı" if s["raw_exit"] else "⚪ İzlemede"),

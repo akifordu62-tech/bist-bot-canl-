@@ -1,5 +1,5 @@
 """
-BIST 30 1. Mod (Hisseye Özel Giriş/Soğuma + Çıkış RSI & Otomatik Öğrenen 5 Hisse Portföy) Web Paneli (V7.0)
+BIST 30 Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma + Çıkış RSI & Otomatik Öğrenen 5 Hisse Portföy) Web Paneli (V8.0)
 """
 import sys
 import importlib
@@ -15,7 +15,7 @@ except Exception:
 
 import config as _cfg_mod
 import strategy as _strat_mod
-if not hasattr(_cfg_mod, "get_stock_params") or not hasattr(_strat_mod, "recalibrate_and_save_stock"):
+if getattr(_cfg_mod, "STRATEGY_VERSION", "") != "V8_HYBRID" or not hasattr(_strat_mod, "recalibrate_and_save_stock"):
     for _mod_name in [
         "config",
         "bist_symbols",
@@ -52,7 +52,7 @@ from telegram_notifier import (
 )
 
 st.set_page_config(
-    page_title="BIST 30 Özel RSI & Portföy Paneli",
+    page_title="BIST 30 Hibrit Özel RSI & Portföy Paneli",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -219,12 +219,12 @@ with st.sidebar.expander("Endeks Hisselerini Yönet", expanded=False):
             st.success("Endeks listeleri güncellendi!")
             st.rerun()
 
-st.sidebar.subheader("🛠️ Strateji Parametreleri (V7.0 - 1. Mod)")
+st.sidebar.subheader("🛠️ Strateji Parametreleri (V8.0 - Hibrit)")
 with st.sidebar.expander("Girdi Ayarlarını Değiştir", expanded=False):
     use_opt_entry = st.checkbox(
-        "1. Mod: Hisseye Özel Giriş & Soğuma Kuralı",
+        "Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma)",
         value=True,
-        help="Aktifken her hisse SAT sonrası kendi karakterine uygun RSI soğuma veya bekleme kuralını uygular (tepe yakalanmasını önler).",
+        help="Aktifken her hisse kendi karakterine göre V-Tipi (Eşzamanlı) veya W-Tipi (Önce RSI Soğusun -> Sonra Kriter Ara) soğuma kuralını uygular.",
     )
     use_opt_rsi = st.checkbox(
         "Hisseye Özel Çıkış RSI (2020+ En Kârlı)",
@@ -239,7 +239,7 @@ with st.sidebar.expander("Girdi Ayarlarını Değiştir", expanded=False):
         disabled=use_opt_rsi,
     )
     rsi_max_buy = st.number_input(
-        "Manuel Alım Üst RSI (Özel Giriş Kapalıysa)",
+        "Manuel Alım Üst RSI (Hibrit Giriş Kapalıysa)",
         value=65,
         min_value=50,
         max_value=80,
@@ -268,9 +268,9 @@ current_config = StrategyConfig(
 # 1. HİSSE GRAFİĞİ & SİNYALLER GÖRÜNÜMÜ
 # ==========================================
 if app_mode == "📈 Hisse Grafiği & Sinyaller":
-    st.title("📈 BIST 30 Hisseye Özel Giriş/Soğuma & Çıkış RSI Grafiği")
+    st.title("📈 BIST 30 Hibrit Özel Mod (V/W Soğuma & Çıkış RSI) Grafiği")
     st.markdown(
-        "**1. Mod (Tepe Korumalı Dengeli):** Her şirketin kendi karakterine özel **SAT sonrası soğuma**, **alım üst RSI** ve **çıkış RSI** hedefleriyle çalışan canlı analiz grafiği."
+        "**Hibrit Özel Mod (V8.0):** Her şirketin tahta karakterine göre **V-Tipi (Eşzamanlı)** veya **W-Tipi (Önce RSI Soğusun ➔ Sonra Kriter Ara)** dönüş kuralı ve **Özel Çıkış RSI** hedefiyle çalışan canlı analiz grafiği."
     )
 
     col1, col2, col3, col4 = st.columns([1.7, 1.1, 1.0, 1.1])
@@ -296,9 +296,13 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
     with col4:
         st.write("")
         st.write("")
-        recal_btn = st.button("🔄 Seviyeleri Güncelle", use_container_width=True, help="Kapanan son işlemlerle bu hissenin özel giriş/çıkış RSI seviyelerini yeniden hesaplar.")
+        recal_btn = st.button(
+            "🔄 Seviyeleri Güncelle",
+            use_container_width=True,
+            help="Kapanan son işlemlerle bu hissenin V/W dönüş tipini ve özel giriş/çıkış RSI seviyelerini yeniden hesaplar.",
+        )
 
-    with st.spinner(f"{selected_clean} için veriler ve özel RSI seviyeleri hesaplanıyor..."):
+    with st.spinner(f"{selected_clean} için veriler ve Hibrit Özel Mod sinyalleri hesaplanıyor..."):
         if period_choice == "2020'den Günümüze":
             df = fetch_data(selected_symbol, start="2019-10-01")
         else:
@@ -331,7 +335,7 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
         m3.metric("Hisseye Özel Çıkış Hedefi", f"RSI {opt_rsi}", f"Güncelleme: {cal_date or 'Aktif'}")
         m4.metric("Tekil Hisse Durumu", "🟢 Pozisyonda (AL)" if in_pos else "⚪ Nakitte / İzlemede")
 
-        st.caption(f"🛡️ **{selected_clean} Özel Giriş & Soğuma Kuralı (1. Mod):** {rule_summary}")
+        st.caption(f"🛡️ **{selected_clean} Hibrit Giriş & Soğuma Kuralı (V8.0):** {rule_summary}")
 
         if bool(last_row["Raw_Long_Condition"]):
             st.success(
@@ -351,10 +355,10 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
 # 2. BIST 30 PORTFÖYÜM (MAKSİMUM 5 HİSSE)
 # ==========================================
 elif app_mode == "💼 BIST 30 Portföyüm (Max 5 Hisse)":
-    st.title("💼 BIST 30 Otomatik Portföy Takibi (Maks. 5 Hisse)")
+    st.title("💼 BIST 30 Otomatik Portföy Takibi (Maks. 5 Hisse — Hibrit V8.0)")
     st.markdown(
         "**Kural:** Sadece **BIST 30** şirketleri alınır (`%10` Pay × Maks. `5` Açık Hisse). "
-        "Pozisyon açıkken giriş anındaki hedef RSI **kilitli** tutulur; **SAT** gerçekleşip işlem kapandığı anda yeni işlem verisi eklenerek hissenin giriş/soğuma ve çıkış RSI seviyeleri otomatik güncellenir."
+        "Pozisyon açıkken giriş anındaki hedef RSI **kilitli** tutulur; **SAT** gerçekleşip işlem kapandığı anda yeni işlem verisi eklenerek hissenin **V/W dönüş tipi** ve **giriş/çıkış RSI seviyeleri** otomatik güncellenir."
     )
 
     state = load_portfolio_state()
@@ -386,7 +390,7 @@ elif app_mode == "💼 BIST 30 Portföyüm (Max 5 Hisse)":
         )
 
     if refresh_port_btn:
-        with st.spinner("BIST 30 şirketleri 1. Mod kurallarıyla taranıyor ve 5 hisselik portföy güncelleniyor..."):
+        with st.spinner("BIST 30 şirketleri Hibrit Özel Mod kurallarıyla taranıyor ve 5 hisselik portföy güncelleniyor..."):
             scan_symbols(BIST_30_SYMBOLS, send_telegram=False, save_charts=False, update_portfolio=True)
             st.success("Portföy durumu güncel BIST 30 verileriyle yenilendi!")
             st.rerun()
@@ -427,7 +431,7 @@ elif app_mode == "💼 BIST 30 Portföyüm (Max 5 Hisse)":
                     "Anlık Kâr/Zarar": f"%{pnl:+.2f}",
                     "Güncel RSI": f"{float(pos.get('last_rsi', pos.get('entry_rsi', 50.0))):.1f}",
                     "Kilitli Satış Hedefi": f"RSI {int(pos['target_rsi'])}",
-                    "Özel Filtre": erule,
+                    "Hibrit Filtre (V/W)": erule,
                 }
             )
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
@@ -477,9 +481,9 @@ elif app_mode == "💼 BIST 30 Portföyüm (Max 5 Hisse)":
 # 3. BIST 30 GÜNLÜK TARAMA (SCANNER)
 # ==========================================
 elif app_mode == "🔍 BIST 30 Günlük Tarama":
-    st.title("🔍 BIST 30 Günlük Sinyal & 5 Hisse Filtresi (1. Mod)")
+    st.title("🔍 BIST 30 Günlük Sinyal & 5 Hisse Filtresi (Hibrit Özel Mod)")
     st.markdown(
-        "Sadece **30 adet BIST 30 şirketini** Hisseye Özel Giriş/Soğuma + Çıkış RSI kurallarıyla tarar ve **5 hisse kontenjanına** göre aksiyon üretir."
+        "Sadece **30 adet BIST 30 şirketini** Hibrit Özel Mod (**V-Tipi / W-Tipi Soğuma + Çıkış RSI**) kurallarıyla tarar ve **5 hisse kontenjanına** göre aksiyon üretir."
     )
 
     sc1, sc2 = st.columns([1.5, 1])
@@ -492,7 +496,7 @@ elif app_mode == "🔍 BIST 30 Günlük Tarama":
         start_scan = st.button("🚀 BIST 30 Taramasını Başlat", type="primary", use_container_width=True)
 
     if start_scan:
-        with st.spinner("30 adet BIST 30 şirketi 1. Mod özel kurallarıyla taranıyor..."):
+        with st.spinner("30 adet BIST 30 şirketi Hibrit Özel Mod kurallarıyla taranıyor..."):
             res_scan = scan_symbols(
                 BIST_30_SYMBOLS,
                 send_telegram=send_tg_check,
@@ -518,7 +522,7 @@ elif app_mode == "🔍 BIST 30 Günlük Tarama":
         with st.expander("📩 Telegram Mesaj Önizlemesi", expanded=True):
             st.markdown(preview_msg, unsafe_allow_html=True)
 
-        st.subheader("📋 Tüm BIST 30 Şirketleri Güncel Durum & Özel Giriş/Çıkış RSI Tablosu")
+        st.subheader("📋 Tüm BIST 30 Şirketleri Güncel Durum & Hibrit V/W Kural Tablosu")
         if res_scan.get("all_bist30"):
             st.dataframe(pd.DataFrame(res_scan["all_bist30"]), use_container_width=True, hide_index=True)
 
@@ -526,9 +530,9 @@ elif app_mode == "🔍 BIST 30 Günlük Tarama":
 # 4. BACKTEST & PERFORMANS ANALİZİ
 # ==========================================
 elif app_mode == "🧪 Backtest & Performans":
-    st.title("🧪 1. Mod: Hisseye Özel Giriş/Soğuma & Çıkış RSI Backtest Analizi")
+    st.title("🧪 Hibrit Özel Mod (V/W Soğuma & Çıkış RSI) Backtest Analizi")
     st.markdown(
-        "Seçilen şirketin **2020'den günümüze kendi özel giriş/soğuma ve çıkış RSI kurallarıyla** ürettiği gerçek performansı ölçer."
+        "Seçilen şirketin **2020'den günümüze kendi özel V-Tipi / W-Tipi soğuma ve çıkış RSI kurallarıyla** ürettiği gerçek performansı ölçer."
     )
 
     bcol1, bcol2, bcol3 = st.columns([2, 1, 1])
@@ -555,7 +559,7 @@ elif app_mode == "🧪 Backtest & Performans":
         st.write("")
         st.button("🚀 Testi Yenile", type="primary", use_container_width=True)
 
-    with st.spinner(f"{bt_clean} için 1. Mod Hisseye Özel RSI backtest yapılıyor..."):
+    with st.spinner(f"{bt_clean} için Hibrit Özel Mod backtest yapılıyor..."):
         if "2020" in bt_period:
             df_bt = fetch_data(bt_symbol, start="2019-10-01")
         elif "3 Yıl" in bt_period:
@@ -578,7 +582,7 @@ elif app_mode == "🧪 Backtest & Performans":
             res = backtest_strategy(df_bt_eval)
 
             st.info(
-                f"🎯 **{bt_clean} Özel Kuralları (1. Mod)** — **Çıkış Hedefi: RSI {opt_lvl}** | **Giriş & Soğuma:** {bt_rule}"
+                f"🎯 **{bt_clean} Hibrit Özel Kuralları (V8.0)** — **Çıkış Hedefi: RSI {opt_lvl}** | **Giriş & Soğuma:** {bt_rule}"
             )
 
             st.markdown("### 📊 Genel Performans Özeti")
@@ -734,13 +738,13 @@ elif app_mode == "🧪 Backtest & Performans":
 # 5. AYARLAR & TELEGRAM
 # ==========================================
 elif app_mode == "⚙️ Ayarlar & Telegram":
-    st.title("⚙️ Telegram & BIST 30 Portföy Sistemi Ayarları (V7.0)")
+    st.title("⚙️ Telegram & BIST 30 Hibrit Özel Mod Ayarları (V8.0)")
     st.markdown(
         "**Aktif Kurallar:**\n"
         "- **Evren:** Sadece **BIST 30** Şirketleri\n"
-        "- **Giriş & Soğuma (1. Mod):** Her hisse SAT sonrası kendi özel RSI soğuma veya bekleme kuralını uygular\n"
+        "- **Hibrit Giriş & Soğuma (V/W):** Her hisse tahta karakterine göre **V-Tipi (Eşzamanlı)** veya **W-Tipi (Önce RSI Soğusun ➔ Sonra Kriter Ara)** kuralını uygular\n"
         "- **Çıkış Kuralı:** 2020'den günümüze hisse bazlı en kârlı **Özel Optimum RSI**\n"
-        "- **Canlı Öğrenme:** Pozisyon açıkken hedef RSI sabit kalır; pozisyon SAT ile kapandığında yeni işlem verisi eklenerek seviyeler otomatik güncellenir\n"
+        "- **Canlı Öğrenme:** Pozisyon açıkken hedef RSI sabit kalır; pozisyon SAT ile kapandığında yeni işlem verisi eklenerek V/W tipi ve RSI seviyeleri otomatik güncellenir\n"
         "- **Portföy Sınırı:** Maksimum **5 Açık Hisse** (`%10` Alım Payı)"
     )
 
@@ -748,13 +752,13 @@ elif app_mode == "⚙️ Ayarlar & Telegram":
     tg_chat = st.text_input("Telegram Chat ID:", value=TELEGRAM_CONFIG.get("chat_id", ""))
     st.checkbox("Telegram Bildirimleri Aktif", value=TELEGRAM_CONFIG.get("enabled", True), disabled=True)
 
-    if st.button("🧪 Yeni V7.0 BIST 30 Telegram Formatını Test Et"):
+    if st.button("🧪 Yeni V8.0 Hibrit Telegram Formatını Test Et"):
         if not tg_token or not tg_chat or "BURAYA" in tg_token:
             st.error("Lütfen geçerli bir Bot Token ve Chat ID giriniz.")
         else:
             with st.spinner("Test mesajı gönderiliyor..."):
                 ok = test_telegram_connection(token=tg_token, chat_id=tg_chat)
                 if ok:
-                    st.success("Yeni V7.0 BIST 30 test mesajı Telegram'ınıza iletildi! 🎉")
+                    st.success("Yeni V8.0 Hibrit Mod test mesajı Telegram'ınıza iletildi! 🎉")
                 else:
                     st.error("Mesaj gönderilemedi. Token veya Chat ID bilgilerini kontrol edin.")

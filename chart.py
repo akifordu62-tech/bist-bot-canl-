@@ -1,8 +1,7 @@
 """
-Plotly ile İnteraktif Grafik Modülü (V7.0 - 1. Mod Hisseye Özel Giriş/Soğuma & Çıkış RSI)
+Plotly ile İnteraktif Grafik Modülü (V8.0 - Hibrit Özel Mod: V-Tipi / W-Tipi Soğuma & Çıkış RSI)
 """
 import os
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -17,10 +16,10 @@ def create_chart(
     height: int = 680,
 ) -> go.Figure:
     """
-    1. Mod Hisseye Özel Giriş/Soğuma & Çıkış RSI sinyallerini ve gerçek işlem bağlantı çizgilerini çizer:
+    Hibrit Özel Mod (V-Tipi / W-Tipi Giriş-Soğuma & Çıkış RSI) sinyallerini ve gerçek işlem bağlantı çizgilerini çizer:
     - Panel 1: Mum grafiği, gerçek AL / SAT noktaları ve kâr/zarar bağlantı çizgileri
     - Panel 2: Net Hacim barları ve SMA 5 ortalaması
-    - Panel 3: RSI (14), Özel Çıkış Hedefi, Özel Alım Üst Sınırı ve varsa Özel Soğuma (Reset RSI) çizgisi
+    - Panel 3: RSI (14), Özel Çıkış Hedefi, Özel Alım Üst Sınırı ve varsa V-Tipi / W-Tipi Soğuma çizgisi
     """
     plot_df = df.copy()
     if "In_Date_Range" in plot_df.columns:
@@ -49,10 +48,16 @@ def create_chart(
     elif sparams.get("reset_rsi") is not None:
         reset_rsi = float(sparams["reset_rsi"])
 
+    if "Optimal_Strict_Reset" in plot_df.columns and not plot_df.empty:
+        strict_w = bool(plot_df["Optimal_Strict_Reset"].iloc[-1])
+    else:
+        strict_w = bool(sparams.get("strict_after_reset", False))
+
     rule_txt = format_stock_entry_rule(
         {
             "exit_rsi": opt_rsi,
             "reset_rsi": reset_rsi,
+            "strict_after_reset": strict_w,
             "max_buy_rsi": max_buy_rsi,
             "cooldown_bars": int(plot_df["Optimal_Cooldown_Bars"].iloc[-1])
             if "Optimal_Cooldown_Bars" in plot_df.columns and not plot_df.empty
@@ -63,6 +68,10 @@ def create_chart(
         }
     )
 
+    vw_tag = ""
+    if reset_rsi is not None:
+        vw_tag = f" | {'W-Tipi' if strict_w else 'V-Tipi'} Soğuma: ≤{int(reset_rsi)}"
+
     fig = make_subplots(
         rows=3,
         cols=1,
@@ -72,8 +81,7 @@ def create_chart(
         subplot_titles=(
             f"<b>{clean_sym}</b> - Fiyat & İşlemler (Çıkış: RSI {opt_rsi} | {rule_txt})",
             "<b>Net Hacim Akışı</b> & NV Ortalaması (SMA 5)",
-            f"<b>RSI (14)</b> & Hisseye Özel Seviyeler (Çıkış: {opt_rsi}"
-            + (f" | Soğuma: ≤{int(reset_rsi)})" if reset_rsi is not None else ")"),
+            f"<b>RSI (14)</b> & Hibrit Özel Seviyeler (Çıkış: {opt_rsi}{vw_tag})",
         ),
     )
 
@@ -206,7 +214,7 @@ def create_chart(
                 col=1,
             )
 
-    # --- PANEL 3: RSI ve Hisseye Özel Seviyeler ---
+    # --- PANEL 3: RSI ve Hibrit Özel Seviyeler ---
     if "RSI" in plot_df.columns:
         fig.add_trace(
             go.Scatter(
@@ -241,14 +249,20 @@ def create_chart(
             col=1,
         )
         if reset_rsi is not None:
+            rst_label = (
+                f"W-Tipi Soğuma: RSI ≤ {int(reset_rsi)} (+Sonra Kriter)"
+                if strict_w
+                else f"V-Tipi Soğuma: RSI ≤ {int(reset_rsi)}"
+            )
+            rst_color = "#ffd54f" if strict_w else "#00e5ff"
             fig.add_hline(
                 y=reset_rsi,
                 line_dash="dash",
-                line_color="#00e5ff",
+                line_color=rst_color,
                 line_width=1.3,
-                annotation_text=f"Özel Soğuma: RSI ≤ {int(reset_rsi)}",
+                annotation_text=rst_label,
                 annotation_position="bottom left",
-                annotation_font=dict(color="#00e5ff", size=10),
+                annotation_font=dict(color=rst_color, size=10),
                 row=3,
                 col=1,
             )
