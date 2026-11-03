@@ -6,7 +6,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "AGHOL": {
     "exit_rsi": 78,
@@ -33,7 +33,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "AKCNS": {
     "exit_rsi": 70,
@@ -132,7 +132,7 @@
     "max_buy_rsi": 60.0,
     "cooldown_bars": 8,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "ASTOR": {
     "exit_rsi": 78,
@@ -141,7 +141,7 @@
     "max_buy_rsi": 52.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "AYGAZ": {
     "exit_rsi": 78,
@@ -168,7 +168,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "BINHO": {
     "exit_rsi": 68,
@@ -312,7 +312,7 @@
     "max_buy_rsi": 52.0,
     "cooldown_bars": 10,
     "no_higher_bars": 35,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "ENERY": {
     "exit_rsi": 76,
@@ -339,7 +339,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 10,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "ENTRA": {
     "exit_rsi": 71,
@@ -357,7 +357,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "EUREN": {
     "exit_rsi": 76,
@@ -384,7 +384,7 @@
     "max_buy_rsi": 55.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "GARAN": {
     "exit_rsi": 69,
@@ -393,7 +393,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 8,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "GLRMK": {
     "exit_rsi": 74,
@@ -429,7 +429,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 8,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "GWIND": {
     "exit_rsi": 78,
@@ -465,7 +465,7 @@
     "max_buy_rsi": 52.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "ISDMR": {
     "exit_rsi": 68,
@@ -519,7 +519,7 @@
     "max_buy_rsi": 52.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "KORDS": {
     "exit_rsi": 74,
@@ -537,7 +537,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 10,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "LMKDC": {
     "exit_rsi": 69,
@@ -564,7 +564,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "MPARK": {
     "exit_rsi": 78,
@@ -627,7 +627,7 @@
     "max_buy_rsi": 60.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "PGSUS": {
     "exit_rsi": 77,
@@ -636,7 +636,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "RGYAS": {
     "exit_rsi": 78,
@@ -658,12 +658,12 @@
   },
   "SAHOL": {
     "exit_rsi": 78,
-    "reset_rsi": 55.0,
-    "strict_after_reset": true,
+    "reset_rsi": 52.0,
+    "strict_after_reset": false,
     "max_buy_rsi": 60.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "SASA": {
     "exit_rsi": 78,
@@ -672,7 +672,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "SISE": {
     "exit_rsi": 74,
@@ -681,7 +681,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "SNGYO": {
     "exit_rsi": 68,
@@ -717,7 +717,7 @@
     "max_buy_rsi": 60.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TCELL": {
     "exit_rsi": 72,
@@ -726,7 +726,7 @@
     "max_buy_rsi": 60.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TCKRC": {
     "exit_rsi": 78,
@@ -744,7 +744,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TKFEN": {
     "exit_rsi": 74,
@@ -762,7 +762,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TRALT": {
     "exit_rsi": 74,
@@ -771,7 +771,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TRENJ": {
     "exit_rsi": 75,
@@ -798,7 +798,7 @@
     "max_buy_rsi": 60.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TSKB": {
     "exit_rsi": 78,
@@ -816,7 +816,7 @@
     "max_buy_rsi": 55.0,
     "cooldown_bars": 10,
     "no_higher_bars": 35,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TTRAK": {
     "exit_rsi": 72,
@@ -843,7 +843,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "TURSG": {
     "exit_rsi": 78,
@@ -870,7 +870,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 0,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "VESTL": {
     "exit_rsi": 75,
@@ -888,7 +888,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 8,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-10-28"
+    "calibrated_at": "2026-11-03"
   },
   "ZOREN": {
     "exit_rsi": 78,
