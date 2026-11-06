@@ -2,8 +2,8 @@
   "universe": "BIST30",
   "max_positions": 5,
   "allocation_pct": 10.0,
-  "updated_at": "2026-11-05 21:33",
-  "last_processed_date": "2026-11-04",
+  "updated_at": "2026-11-06 21:01",
+  "last_processed_date": "2026-11-05",
   "last_calibrated_month": "2026-11",
   "open_positions": [
     {
@@ -15,9 +15,9 @@
       "target_rsi": 71,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
       "allocation_pct": 10.0,
-      "last_price": 31.84,
-      "last_rsi": 38.9,
-      "pnl_pct": 6.06
+      "last_price": 30.8,
+      "last_rsi": 35.6,
+      "pnl_pct": 2.6
     },
     {
       "symbol": "PETKM.IS",
@@ -28,9 +28,9 @@
       "target_rsi": 69,
       "entry_rule": "V-Tipi (RSI ≤ 52 Soğuma + İlk Dönüş) | Alım RSI < 60",
       "allocation_pct": 10.0,
-      "last_price": 17.77,
-      "last_rsi": 41.5,
-      "pnl_pct": 7.63
+      "last_price": 16.88,
+      "last_rsi": 36.6,
+      "pnl_pct": 2.24
     },
     {
       "symbol": "GUBRF.IS",
@@ -41,9 +41,9 @@
       "target_rsi": 72,
       "entry_rule": "Trend Filtreli (Alım RSI < 65 | 8g Bekle)",
       "allocation_pct": 10.0,
-      "last_price": 283.5,
-      "last_rsi": 33.1,
-      "pnl_pct": 3.0
+      "last_price": 289.75,
+      "last_rsi": 35.3,
+      "pnl_pct": 5.27
     },
     {
       "symbol": "PGSUS.IS",
@@ -54,9 +54,9 @@
       "target_rsi": 77,
       "entry_rule": "W-Tipi (Önce RSI ≤ 58 ➔ Sonra Kriter) | Alım RSI < 65",
       "allocation_pct": 10.0,
-      "last_price": 134.6,
-      "last_rsi": 53.8,
-      "pnl_pct": 10.15
+      "last_price": 139.9,
+      "last_rsi": 59.1,
+      "pnl_pct": 14.48
     },
     {
       "symbol": "TOASO.IS",
@@ -67,14 +67,14 @@
       "target_rsi": 77,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
       "allocation_pct": 10.0,
-      "last_price": 226.0,
-      "last_rsi": 40.7,
-      "pnl_pct": 2.12
+      "last_price": 222.7,
+      "last_rsi": 39.2,
+      "pnl_pct": 0.63
     }
   ],
   "closed_history": [],
   "last_daily_actions": {
-    "date": "2026-11-04",
+    "date": "2026-11-05",
     "bought": [],
     "sold": [],
     "skipped": []
