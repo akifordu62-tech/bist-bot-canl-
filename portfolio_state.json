@@ -2,8 +2,8 @@
   "universe": "BIST30",
   "max_positions": 5,
   "allocation_pct": 10.0,
-  "updated_at": "2026-11-11 22:12",
-  "last_processed_date": "2026-11-10",
+  "updated_at": "2026-11-12 21:54",
+  "last_processed_date": "2026-11-11",
   "last_calibrated_month": "2026-11",
   "open_positions": [
     {
@@ -15,9 +15,9 @@
       "target_rsi": 71,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
       "allocation_pct": 10.0,
-      "last_price": 32.52,
-      "last_rsi": 44.7,
-      "pnl_pct": 8.33
+      "last_price": 31.54,
+      "last_rsi": 41.1,
+      "pnl_pct": 5.06
     },
     {
       "symbol": "PETKM.IS",
@@ -28,9 +28,9 @@
       "target_rsi": 69,
       "entry_rule": "V-Tipi (RSI ≤ 52 Soğuma + İlk Dönüş) | Alım RSI < 60",
       "allocation_pct": 10.0,
-      "last_price": 16.58,
-      "last_rsi": 36.7,
-      "pnl_pct": 0.42
+      "last_price": 16.61,
+      "last_rsi": 37.0,
+      "pnl_pct": 0.61
     },
     {
       "symbol": "GUBRF.IS",
@@ -41,9 +41,9 @@
       "target_rsi": 72,
       "entry_rule": "Trend Filtreli (Alım RSI < 65 | 8g Bekle)",
       "allocation_pct": 10.0,
-      "last_price": 288.0,
-      "last_rsi": 37.4,
-      "pnl_pct": 4.63
+      "last_price": 280.5,
+      "last_rsi": 35.8,
+      "pnl_pct": 1.91
     },
     {
       "symbol": "PGSUS.IS",
@@ -54,9 +54,9 @@
       "target_rsi": 77,
       "entry_rule": "W-Tipi (Önce RSI ≤ 58 ➔ Sonra Kriter) | Alım RSI < 65",
       "allocation_pct": 10.0,
-      "last_price": 154.4,
-      "last_rsi": 70.3,
-      "pnl_pct": 26.35
+      "last_price": 154.8,
+      "last_rsi": 70.6,
+      "pnl_pct": 26.68
     },
     {
       "symbol": "TOASO.IS",
@@ -67,16 +67,24 @@
       "target_rsi": 77,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
       "allocation_pct": 10.0,
-      "last_price": 240.8,
-      "last_rsi": 49.9,
-      "pnl_pct": 8.81
+      "last_price": 232.5,
+      "last_rsi": 45.6,
+      "pnl_pct": 5.06
     }
   ],
   "closed_history": [],
   "last_daily_actions": {
-    "date": "2026-11-10",
+    "date": "2026-11-11",
     "bought": [],
     "sold": [],
-    "skipped": []
+    "skipped": [
+      {
+        "symbol": "TUPRS.IS",
+        "clean_symbol": "TUPRS",
+        "price": 348.5,
+        "rsi": 45.8,
+        "target_rsi": 78
+      }
+    ]
   }
 }
