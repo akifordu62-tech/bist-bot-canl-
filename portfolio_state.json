@@ -2,8 +2,8 @@
   "universe": "BIST30",
   "max_positions": 5,
   "allocation_pct": 10.0,
-  "updated_at": "2026-11-12 21:54",
-  "last_processed_date": "2026-11-11",
+  "updated_at": "2026-11-13 21:32",
+  "last_processed_date": "2026-11-12",
   "last_calibrated_month": "2026-11",
   "open_positions": [
     {
@@ -15,9 +15,9 @@
       "target_rsi": 71,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
       "allocation_pct": 10.0,
-      "last_price": 31.54,
-      "last_rsi": 41.1,
-      "pnl_pct": 5.06
+      "last_price": 32.06,
+      "last_rsi": 43.7,
+      "pnl_pct": 6.8
     },
     {
       "symbol": "PETKM.IS",
@@ -28,9 +28,9 @@
       "target_rsi": 69,
       "entry_rule": "V-Tipi (RSI ≤ 52 Soğuma + İlk Dönüş) | Alım RSI < 60",
       "allocation_pct": 10.0,
-      "last_price": 16.61,
-      "last_rsi": 37.0,
-      "pnl_pct": 0.61
+      "last_price": 16.79,
+      "last_rsi": 38.8,
+      "pnl_pct": 1.7
     },
     {
       "symbol": "GUBRF.IS",
@@ -54,9 +54,9 @@
       "target_rsi": 77,
       "entry_rule": "W-Tipi (Önce RSI ≤ 58 ➔ Sonra Kriter) | Alım RSI < 65",
       "allocation_pct": 10.0,
-      "last_price": 154.8,
-      "last_rsi": 70.6,
-      "pnl_pct": 26.68
+      "last_price": 158.2,
+      "last_rsi": 72.7,
+      "pnl_pct": 29.46
     },
     {
       "symbol": "TOASO.IS",
@@ -67,23 +67,30 @@
       "target_rsi": 77,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
       "allocation_pct": 10.0,
-      "last_price": 232.5,
-      "last_rsi": 45.6,
-      "pnl_pct": 5.06
+      "last_price": 238.0,
+      "last_rsi": 48.7,
+      "pnl_pct": 7.55
     }
   ],
   "closed_history": [],
   "last_daily_actions": {
-    "date": "2026-11-11",
+    "date": "2026-11-12",
     "bought": [],
     "sold": [],
     "skipped": [
       {
-        "symbol": "TUPRS.IS",
-        "clean_symbol": "TUPRS",
-        "price": 348.5,
-        "rsi": 45.8,
+        "symbol": "SASA.IS",
+        "clean_symbol": "SASA",
+        "price": 1.6,
+        "rsi": 42.0,
         "target_rsi": 78
+      },
+      {
+        "symbol": "BIMAS.IS",
+        "clean_symbol": "BIMAS",
+        "price": 388.0,
+        "rsi": 53.3,
+        "target_rsi": 69
       }
     ]
   }
