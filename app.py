@@ -163,10 +163,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-NAV_OPTIONS = ["📈 Grafik", "💼 Portföy (5)", "🔍 Tarama", "🧪 Backtest", "⚙️ Ayarlar"]
+NAV_OPTIONS = ["📈 Grafik", "📌 Açık Sinyaller", "🔍 Tarama", "🧪 Backtest", "⚙️ Ayarlar"]
 NAV_MAP = {
     "📈 Grafik": "📈 Hisse Grafiği & Sinyaller",
-    "💼 Portföy (5)": "💼 BIST 30 Portföyüm (Max 5 Hisse)",
+    "📌 Açık Sinyaller": "📌 BIST 30 Açık Sinyaller & Takip",
     "🔍 Tarama": "🔍 BIST 30 Günlük Tarama",
     "🧪 Backtest": "🧪 Backtest & Performans",
     "⚙️ Ayarlar": "⚙️ Ayarlar & Telegram",
@@ -352,70 +352,64 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
         st.error(f"{selected_symbol} için veri alınamadı.")
 
 # ==========================================
-# 2. BIST 30 PORTFÖYÜM (MAKSİMUM 5 HİSSE)
+# 2. BIST 30 AÇIK SİNYALLER & TAKİP (SINIRSIZ)
 # ==========================================
-elif app_mode == "💼 BIST 30 Portföyüm (Max 5 Hisse)":
-    st.title("💼 BIST 30 Otomatik Portföy Takibi (Maks. 5 Hisse — Hibrit V8.0)")
+elif app_mode == "📌 BIST 30 Açık Sinyaller & Takip":
+    st.title("📌 BIST 30 Aktif Açık Sinyaller & Günlük Takip (V8.0)")
     st.markdown(
-        "**Kural:** Sadece **BIST 30** şirketleri alınır (`%10` Pay × Maks. `5` Açık Hisse). "
-        "Pozisyon açıkken giriş anındaki hedef RSI **kilitli** tutulur; **SAT** gerçekleşip işlem kapandığı anda yeni işlem verisi eklenerek hissenin **V/W dönüş tipi** ve **giriş/çıkış RSI seviyeleri** otomatik güncellenir."
+        "**Kural:** 5 hisse sınırı olmadan **tüm BIST 30 şirketleri (30 hisse)** takip edilir. "
+        "Her gün yeni **AL / SAT** sinyali verenler ve açıkta devam eden tüm sinyaller (**Sinyal Tarihi** ve **Sinyalden % Eksi/Artı Farkı** ile) listelenir."
     )
 
     state = load_portfolio_state()
-    max_pos = int(state.get("max_positions", 5))
-    alloc_pct = float(state.get("allocation_pct", 10.0))
     open_positions = state.get("open_positions", [])
     open_cnt = len(open_positions)
-    empty_slots = max(0, max_pos - open_cnt)
-    stock_exp = int(open_cnt * alloc_pct)
-    cash_exp = max(0, 100 - stock_exp)
+    cheap_cnt = sum(1 for p in open_positions if float(p.get("pnl_pct", 0.0)) <= 0.0)
+    profit_cnt = sum(1 for p in open_positions if float(p.get("pnl_pct", 0.0)) > 0.0)
 
     p1, p2, p3, p4 = st.columns(4)
-    p1.metric("Açık Kontenjan", f"{open_cnt} / {max_pos} Hisse", f"{empty_slots} Boş Yer")
-    p2.metric("İşlem Başına Pay", f"%{alloc_pct:.0f}", "BIST 30 Odaklı")
-    p3.metric("Aktif Borsa Ağırlığı", f"%{stock_exp}", "Maks. %50 Sınır")
-    p4.metric("Nakit / Mevduat Payı", f"%{cash_exp}", "PPF / Mevduat Kalkanı")
+    p1.metric("Açık AL Sinyali", f"{open_cnt} / 30 Hisse", "Sınırsız BIST 30 Takibi")
+    p2.metric("Sinyal Fiyatından Ucuz", f"{cheap_cnt} Hisse", "İndirimli / Alım Bölgesi")
+    p3.metric("Kârda Devam Eden", f"{profit_cnt} Hisse", "Hedef RSI Bekleniyor")
+    p4.metric("Sinyali Olmayan", f"{max(0, 30 - open_cnt)} Hisse", "Soğuma / İzlemede")
 
     act_col1, act_col2 = st.columns([1, 1])
     with act_col1:
         refresh_port_btn = st.button(
-            "🔄 BIST 30 Taraması Yap & Portföy Fiyatlarını Güncelle",
+            "🔄 BIST 30 Taraması Yap & Açık Sinyal Tablosunu Güncelle",
             type="primary",
             use_container_width=True,
         )
     with act_col2:
         send_port_tg_btn = st.button(
-            "📲 Güncel Portföy Raporunu Telegram'a Gönder",
+            "📲 Güncel BIST 30 Tablosunu Telegram'a Gönder",
             use_container_width=True,
         )
 
     if refresh_port_btn:
-        with st.spinner("BIST 30 şirketleri Hibrit Özel Mod kurallarıyla taranıyor ve 5 hisselik portföy güncelleniyor..."):
+        with st.spinner("30 adet BIST 30 şirketi taranıyor ve açık sinyaller güncelleniyor..."):
             scan_symbols(BIST_30_SYMBOLS, send_telegram=False, save_charts=False, update_portfolio=True)
-            st.success("Portföy durumu güncel BIST 30 verileriyle yenilendi!")
+            st.success("BIST 30 açık sinyal tablosu güncel verilerle yenilendi!")
             st.rerun()
 
     if send_port_tg_btn:
-        last_act = state.get("last_daily_actions", {})
-        disp_dt = state.get("last_processed_date") or state.get("updated_at", "")
-        ok = send_bist30_daily_report(
-            date_str=disp_dt,
-            bought_list=last_act.get("bought", []),
-            sold_list=last_act.get("sold", []),
-            open_positions=open_positions,
-            skipped_list=last_act.get("skipped", []),
-            max_positions=max_pos,
-            allocation_pct=alloc_pct,
-        )
-        if ok:
-            st.success("Portföy raporu Telegram'a başarıyla gönderildi!")
-        else:
-            st.error("Telegram gönderimi başarısız oldu. Ayarlar sekmesini kontrol edin.")
+        with st.spinner("30 adet BIST 30 şirketi taranıyor ve güncel tablo Telegram'a gönderiliyor..."):
+            res_tg = scan_symbols(
+                BIST_30_SYMBOLS,
+                send_telegram=True,
+                save_charts=False,
+                force_telegram=True,
+                update_portfolio=True,
+            )
+            if res_tg.get("all_stocks_list"):
+                st.success("BIST 30 güncel sinyal tablosu Telegram'a başarıyla gönderildi!")
+            else:
+                st.error("Telegram gönderimi başarısız oldu. Ayarlar sekmesini kontrol edin.")
 
-    st.markdown("### 📌 Sepetteki Açık BIST 30 Hisseleri")
+    st.markdown("### 📌 Takipteki Açık BIST 30 Sinyalleri (1G RSI En Ucuzdan Sıralı)")
     if open_positions:
         rows = []
-        for idx, pos in enumerate(open_positions, 1):
+        for idx, pos in enumerate(sorted(open_positions, key=lambda x: float(x.get("last_rsi", 50.0))), 1):
             ep = float(pos["entry_price"])
             lp = float(pos.get("last_price", ep))
             pnl = ((lp - ep) / ep * 100.0) if ep > 0 else 0.0
@@ -423,73 +417,43 @@ elif app_mode == "💼 BIST 30 Portföyüm (Max 5 Hisse)":
             erule = pos.get("entry_rule") or format_stock_entry_rule(get_stock_params(csym))
             rows.append(
                 {
-                    "#": idx,
+                    "Sıra": idx,
                     "Hisse": csym,
-                    "Alış Tarihi": pos["entry_date"],
-                    "Alış Fiyatı": f"{ep:.2f} TL",
+                    "Son AL Sinyal Tarihi": pos.get("entry_date_disp") or pos["entry_date"],
+                    "Sinyal Fiyatı": f"{ep:.2f} TL",
                     "Güncel Fiyat": f"{lp:.2f} TL",
-                    "Anlık Kâr/Zarar": f"%{pnl:+.2f}",
-                    "Güncel RSI": f"{float(pos.get('last_rsi', pos.get('entry_rsi', 50.0))):.1f}",
-                    "Kilitli Satış Hedefi": f"RSI {int(pos['target_rsi'])}",
+                    "Sinyalden Fark (%)": f"%{pnl:+.2f}",
+                    "Güncel 1G RSI": f"{float(pos.get('last_rsi', pos.get('entry_rsi', 50.0))):.1f}",
+                    "Hedef Çıkış RSI": f"RSI {int(pos['target_rsi'])}",
                     "Hibrit Filtre (V/W)": erule,
                 }
             )
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
         st.info(
-            "Şu an portföyde açık hisse bulunmuyor (`0/5` — `%100` Nakit/Mevduat). İlk BIST 30 AL sinyali geldiğinde otomatik olarak buraya eklenecek ve Telegram'dan bildirilecektir."
+            "Tabloyu görmek için yukarıdaki **'🔄 BIST 30 Taraması Yap & Açık Sinyal Tablosunu Güncelle'** butonuna tıklayın."
         )
-
-    with st.expander("🛠️ Sepeti Manuel Düzenle (Elinizdeki BIST 30 Hissesini Ekleyin veya Çıkarın)", expanded=False):
-        mcol1, mcol2 = st.columns(2)
-        with mcol1:
-            st.markdown("**➕ Portföye Manuel BIST 30 Hissesi Ekle**")
-            b30_clean_list = [s.replace(".IS", "") for s in BIST_30_SYMBOLS]
-            add_sym = st.selectbox("BIST 30 Şirketi:", b30_clean_list, key="man_add_sym")
-            add_price = st.number_input("Alış Fiyatınız (TL):", min_value=0.01, value=100.0, step=0.5)
-            if st.button("➕ Sepete Ekle"):
-                ok, msg = add_manual_position(add_sym, add_price)
-                if ok:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.warning(msg)
-
-        with mcol2:
-            st.markdown("**➖ Açık Pozisyonu Sepetten Çıkar**")
-            if open_positions:
-                open_syms = [p["clean_symbol"] for p in open_positions]
-                rem_sym = st.selectbox("Çıkarılacak Hisse:", open_syms, key="man_rem_sym")
-                if st.button("🗑️ Sepetten Çıkar & Seviyeleri Güncelle"):
-                    df_recal = fetch_data(f"{rem_sym}.IS", start="2019-10-01")
-                    ok, msg = remove_manual_position(rem_sym, df_for_recal=df_recal)
-                    if ok:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.warning(msg)
-            else:
-                st.caption("Çıkarılacak açık pozisyon yok.")
 
     closed_hist = state.get("closed_history", [])
     if closed_hist:
         st.markdown("---")
-        st.subheader("📜 Kapanan Portföy İşlemleri")
+        st.subheader("📜 Hedef RSI'a Ulaşıp Kapanan Sinyaller")
         st.dataframe(pd.DataFrame(closed_hist[::-1]), use_container_width=True, hide_index=True)
 
 # ==========================================
 # 3. BIST 30 GÜNLÜK TARAMA (SCANNER)
 # ==========================================
 elif app_mode == "🔍 BIST 30 Günlük Tarama":
-    st.title("🔍 BIST 30 Günlük Sinyal & 5 Hisse Filtresi (Hibrit Özel Mod)")
+    st.title("🔍 BIST 30 Günlük Sinyal & Açık İşlem Tablosu (V8.0)")
     st.markdown(
-        "Sadece **30 adet BIST 30 şirketini** Hibrit Özel Mod (**V-Tipi / W-Tipi Soğuma + Çıkış RSI**) kurallarıyla tarar ve **5 hisse kontenjanına** göre aksiyon üretir."
+        "**30 adet BIST 30 şirketinin tamamını** orijinal V8.0 (**1 Günlük**) kurallarıyla tarar; "
+        "o gün yeni sinyal olup olmadığını ve tüm hisselerin **Sinyal Tarihi + Sinyalden % Eksi/Artı** durumunu tablo olarak üretir."
     )
 
     sc1, sc2 = st.columns([1.5, 1])
     with sc1:
         send_tg_check = st.checkbox(
-            "Tarama tamamlandığında toplu raporu Telegram'a da gönder",
+            "Tarama tamamlandığında 30 hisselik tabloyu Telegram'a da gönder",
             value=False,
         )
     with sc2:
@@ -506,23 +470,23 @@ elif app_mode == "🔍 BIST 30 Günlük Tarama":
             )
 
         c1, c2, c3 = st.columns(3)
-        c1.metric("🟢 Sepete Giren Yeni AL", len(res_scan["buy"]))
-        c2.metric("🔴 Sepetten Çıkan SAT", len(res_scan["sell"]))
-        c3.metric("💼 Güncel Açık Sepet", f"{len(res_scan['open_positions'])} / 5 Hisse")
+        c1.metric("🟢 Bugün Yeni AL Veren", len(res_scan["buy"]))
+        c2.metric("🔴 Bugün SAT Veren", len(res_scan["sell"]))
+        c3.metric("📌 Toplam Açık Sinyal", f"{len(res_scan['open_positions'])} / 30 Hisse")
 
         preview_msg = format_bist30_daily_report(
             date_str=res_scan.get("display_date", ""),
             bought_list=res_scan["buy"],
             sold_list=res_scan["sell"],
             open_positions=res_scan["open_positions"],
-            skipped_list=res_scan["skipped"],
-            max_positions=PORTFOLIO_CONFIG.get("max_positions", 5),
-            allocation_pct=PORTFOLIO_CONFIG.get("allocation_pct", 10.0),
+            skipped_list=[],
+            max_positions=30,
+            all_stocks_list=res_scan.get("all_stocks_list", []),
         )
         with st.expander("📩 Telegram Mesaj Önizlemesi", expanded=True):
             st.markdown(preview_msg, unsafe_allow_html=True)
 
-        st.subheader("📋 Tüm BIST 30 Şirketleri Güncel Durum & Hibrit V/W Kural Tablosu")
+        st.subheader("📋 Tüm BIST 30 Şirketleri Güncel Durum & Sinyal Tablosu (1G RSI Sıralı)")
         if res_scan.get("all_bist30"):
             st.dataframe(pd.DataFrame(res_scan["all_bist30"]), use_container_width=True, hide_index=True)
 
@@ -741,11 +705,10 @@ elif app_mode == "⚙️ Ayarlar & Telegram":
     st.title("⚙️ Telegram & BIST 30 Hibrit Özel Mod Ayarları (V8.0)")
     st.markdown(
         "**Aktif Kurallar:**\n"
-        "- **Evren:** Sadece **BIST 30** Şirketleri\n"
+        "- **Evren:** Tüm **BIST 30** Şirketleri (30 Hisse — 5 Hisse Sınırı Yok)\n"
         "- **Hibrit Giriş & Soğuma (V/W):** Her hisse tahta karakterine göre **V-Tipi (Eşzamanlı)** veya **W-Tipi (Önce RSI Soğusun ➔ Sonra Kriter Ara)** kuralını uygular\n"
         "- **Çıkış Kuralı:** 2020'den günümüze hisse bazlı en kârlı **Özel Optimum RSI**\n"
-        "- **Canlı Öğrenme:** Pozisyon açıkken hedef RSI sabit kalır; pozisyon SAT ile kapandığında yeni işlem verisi eklenerek V/W tipi ve RSI seviyeleri otomatik güncellenir\n"
-        "- **Portföy Sınırı:** Maksimum **5 Açık Hisse** (`%10` Alım Payı)"
+        "- **Günlük Bildirim:** O gün yeni AL / SAT sinyali verenler + 30 hissenin tamamı için sinyal tarihi ve sinyalden % eksi/artı tablosu"
     )
 
     tg_token = st.text_input("Telegram Bot Token:", value=TELEGRAM_CONFIG.get("token", ""), type="password")

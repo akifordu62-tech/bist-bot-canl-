@@ -157,8 +157,8 @@ class StrategyConfig:
     rsi_overbought: int = 72                      # Manuel mod seçilirse kullanılacak sabit çıkış RSI seviyesi
     use_fast_2bar_neg_flow: bool = True           # 2 ve 3 bar negatif akış dönüşlerini yakalar
 
-    # Portföy Kuralları (Sadece BIST 30 | %10 Alım x Maksimum 5 Hisse)
-    max_open_positions: int = 5
+    # Portföy / Açık Sinyal Kuralları (Sadece BIST 30 | 30 Hisse Sınırsız Takip)
+    max_open_positions: int = 30
     position_size_pct: float = 10.0
 
     # Tarih Filtresi (2020'den günümüze)
@@ -174,7 +174,7 @@ class StrategyConfig:
 
 PORTFOLIO_CONFIG = {
     "universe": "BIST30",
-    "max_positions": 5,
+    "max_positions": 30,
     "allocation_pct": 10.0,
 }
 

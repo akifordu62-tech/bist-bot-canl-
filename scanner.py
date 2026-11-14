@@ -1,14 +1,15 @@
 """
-BIST 30 Günlük Tarama, Hibrit Özel Mod (V/W Soğuma) & Otomatik Öğrenen 5 Hisse Portföy Modülü (Scanner V8.0)
-- Sadece BIST 30 şirketlerini tarar.
-- Her hisse için kendi karakterine uygun V-Tipi (Eşzamanlı) veya W-Tipi (Soğuma Sonrası Kriter Arama) soğuma ve Özel Çıkış RSI kurallarını uygular.
-- İşlem açıkken hedef RSI kilitli kalır; işlem SAT ile kapandığı anda yeni işlem verisi eklenerek optimal_params.json otomatik güncellenir.
-- Ayrıca her yeni ayın ilk işlem gününde açık olmayan BIST 30 hisselerinin özel seviyeleri güncel verilerle tazelenir.
+BIST 30 Günlük Tarama, Hibrit Özel Mod (V/W Soğuma) & Sınırsız Açık Sinyal Takip Modülü (Scanner V8.0)
+- Sadece BIST 30 şirketlerini (30 hisse) tarar.
+- 5 hisse sınırı olmadan tüm BIST 30 hisselerinde o gün yeni AL / SAT sinyali olup olmadığını ve
+  açıkta devam eden tüm AL sinyallerini (sinyal tarihi ve sinyal fiyatından % farkı ile) takip eder.
+- İşlem SAT ile kapandığı anda yeni işlem verisi eklenerek optimal_params.json otomatik güncellenir.
 """
 import os
 import sys
 import json
 import datetime
+import numpy as np
 import pandas as pd
 import yfinance as yf
 
@@ -89,9 +90,9 @@ def scan_symbols(
     update_portfolio: bool = True,
 ) -> dict:
     """
-    Sadece BIST 30 şirketlerini Hibrit Özel Mod (V/W Giriş-Soğuma + Çıkış RSI) stratejisiyle tarar,
-    5 hisselik portföy sınırına göre AL/SAT kararlarını üretir, kapanan işlemlerle seviyeleri günceller
-    ve Telegram'a tek toplu rapor iletir.
+    30 adet BIST 30 şirketini Hibrit Özel Mod (V/W Giriş-Soğuma + Çıkış RSI) stratejisiyle tarar,
+    5 hisse sınırı olmadan tüm yeni AL/SAT sinyallerini ve açık işlemleri belirler,
+    ve Telegram'a 30 hissenin güncel durum tablosunu iletir.
     """
     if symbols_list is None:
         targets = list(BIST_30_SYMBOLS)
@@ -101,13 +102,10 @@ def scan_symbols(
 
     config = StrategyConfig()
     state = load_portfolio_state()
-    max_positions = int(state.get("max_positions", PORTFOLIO_CONFIG.get("max_positions", 5)))
-    allocation_pct = float(state.get("allocation_pct", PORTFOLIO_CONFIG.get("allocation_pct", 10.0)))
 
-    print("\n" + "=" * 76)
-    print(f"  🔍 BIST 30 HİBRİT ÖZEL MOD (V/W SOĞUMA & ÇIKIŞ RSI) TARAMASI ({len(targets)} Şirket)")
-    print(f"  📌 Portföy Kuralı: Maksimum {max_positions} Açık Hisse (Her Alım %{allocation_pct:.0f})")
-    print("=" * 76)
+    print("\n" + "=" * 78)
+    print(f"  🔍 BIST 30 HİBRİT ÖZEL MOD (1G) GÜNLÜK SİNYAL & AÇIK İŞLEM TARAMASI ({len(targets)} Hisse)")
+    print("=" * 78)
 
     raw_dfs = {}
     latest_bar_date = None
@@ -126,17 +124,21 @@ def scan_symbols(
     print()
     if not latest_bar_date:
         print("[UYARI]: Hiçbir BIST 30 hissesi için güncel veri alınamadı.")
-        return {"buy": [], "sell": [], "skipped": [], "open_positions": state.get("open_positions", [])}
+        return {
+            "buy": [],
+            "sell": [],
+            "skipped": [],
+            "open_positions": [],
+            "all_stocks_list": [],
+            "all_bist30": [],
+        }
 
-    # Aylık Otomatik Kalibrasyon Kontrolü (Yeni aya girildiğinde açık olmayan hisseleri günceller)
+    # Aylık Otomatik Kalibrasyon Kontrolü
     current_month = latest_bar_date[:7]
-    open_clean_now = {p["clean_symbol"] for p in state.get("open_positions", [])}
     if update_portfolio and state.get("last_calibrated_month") != current_month:
         print(f"  🔄 Yeni ay ({current_month}) periyodik Hibrit Mod kalibrasyonu çalıştırılıyor...")
         for sym, df_raw in raw_dfs.items():
-            csym = sym.replace(".IS", "").strip().upper()
-            if csym not in open_clean_now:
-                recalibrate_and_save_stock(sym, df_raw)
+            recalibrate_and_save_stock(sym, df_raw)
         state["last_calibrated_month"] = current_month
         save_portfolio_state(state)
 
@@ -153,8 +155,66 @@ def scan_symbols(
         close_price = float(last_row["Close"])
         rsi_val = float(last_row["RSI"])
         target_rsi = int(last_row["Optimal_RSI_Exit"])
-        raw_long = bool(last_row["Raw_Long_Condition"])
-        raw_exit = bool(last_row["Raw_Exit_Condition"])
+        raw_long = bool(last_row["Raw_Long_Condition"]) or bool(last_row["Trade_Entry"])
+        raw_exit = bool(last_row["Raw_Exit_Condition"]) or bool(last_row["Exit_Signal"])
+
+        # Son AL ve son SAT sinyal indekslerini bul
+        long_mask = (
+            df_strat["Raw_Long_Condition"].fillna(False).to_numpy(dtype=bool)
+            | df_strat["Trade_Entry"].fillna(False).to_numpy(dtype=bool)
+        )
+        exit_mask = (
+            df_strat["Raw_Exit_Condition"].fillna(False).to_numpy(dtype=bool)
+            | df_strat["Exit_Signal"].fillna(False).to_numpy(dtype=bool)
+        )
+        long_indices = np.where(long_mask)[0]
+        exit_indices = np.where(exit_mask)[0]
+
+        last_long_idx = int(long_indices[-1]) if len(long_indices) > 0 else -1
+        last_exit_idx = int(exit_indices[-1]) if len(exit_indices) > 0 else -1
+
+        is_new_buy_today = (bar_date_iso == latest_bar_date) and raw_long
+
+        # Bugün SAT verip kapanan açık bir sinyal var mı?
+        was_active_before_today = False
+        if len(long_indices) > 0:
+            prev_exits = exit_indices[exit_indices < (len(df_strat) - 1)]
+            prev_last_exit = int(prev_exits[-1]) if len(prev_exits) > 0 else -1
+            prev_longs = long_indices[long_indices < (len(df_strat) - 1)]
+            prev_last_long = int(prev_longs[-1]) if len(prev_longs) > 0 else -1
+            if prev_last_long > prev_last_exit:
+                was_active_before_today = True
+
+        is_sell_today = (bar_date_iso == latest_bar_date) and raw_exit and was_active_before_today
+
+        if last_long_idx > last_exit_idx:
+            has_active_signal = True
+            sig_ts = df_strat.index[last_long_idx]
+            signal_date_iso = sig_ts.strftime("%Y-%m-%d")
+            signal_date_short = sig_ts.strftime("%d.%m")
+            signal_date_disp = sig_ts.strftime("%d.%m.%Y")
+            signal_price = float(df_strat["Close"].iloc[last_long_idx])
+            signal_rsi = float(df_strat["RSI"].iloc[last_long_idx])
+            signal_diff_pct = ((close_price - signal_price) / signal_price * 100.0) if signal_price > 0 else 0.0
+        elif is_sell_today:
+            has_active_signal = False
+            prev_longs = long_indices[long_indices < last_exit_idx]
+            entry_idx = int(prev_longs[-1]) if len(prev_longs) > 0 else last_long_idx
+            sig_ts = df_strat.index[entry_idx]
+            signal_date_iso = sig_ts.strftime("%Y-%m-%d")
+            signal_date_short = sig_ts.strftime("%d.%m")
+            signal_date_disp = sig_ts.strftime("%d.%m.%Y")
+            signal_price = float(df_strat["Close"].iloc[entry_idx])
+            signal_rsi = float(df_strat["RSI"].iloc[entry_idx])
+            signal_diff_pct = ((close_price - signal_price) / signal_price * 100.0) if signal_price > 0 else 0.0
+        else:
+            has_active_signal = False
+            signal_date_iso = ""
+            signal_date_short = "YOK"
+            signal_date_disp = "Sinyal Yok"
+            signal_price = 0.0
+            signal_rsi = 0.0
+            signal_diff_pct = None
 
         sparams = get_stock_params(clean_sym)
         entry_rule_str = format_stock_entry_rule(sparams)
@@ -171,6 +231,15 @@ def scan_symbols(
             "entry_rule": entry_rule_str,
             "raw_long": raw_long,
             "raw_exit": raw_exit,
+            "has_active_signal": has_active_signal,
+            "is_new_buy_today": is_new_buy_today,
+            "is_sell_today": is_sell_today,
+            "signal_date_iso": signal_date_iso,
+            "signal_date_short": signal_date_short,
+            "signal_date_disp": signal_date_disp,
+            "signal_price": signal_price,
+            "signal_rsi": signal_rsi,
+            "signal_diff_pct": signal_diff_pct,
             "win_rate": float(bt_res.get("win_rate", 0.0)),
             "avg_win": float(bt_res.get("avg_win_pct", 0.0)),
             "total_return_pct": float(bt_res.get("total_return_pct", 0.0)),
@@ -182,152 +251,110 @@ def scan_symbols(
 
     sold_today = []
     bought_today = []
-    skipped_today = []
+    open_positions_now = []
 
-    if update_portfolio and state.get("last_processed_date") != latest_bar_date:
-        # 1. ADIM: Sadece portföyde açık olan (maks. 5) hisselerde KİLİTLİ hedef RSI ile SAT kontrolü yap
-        still_open = []
-        sold_symbols_set = set()
+    is_new_day = state.get("last_processed_date") != latest_bar_date
 
-        for pos in state.get("open_positions", []):
-            csym = pos["clean_symbol"]
-            snap = stock_snapshots.get(csym)
-            if snap is None:
-                still_open.append(pos)
-                continue
-
-            ep = float(pos["entry_price"])
-            cur_p = snap["price"]
-            cur_rsi = snap["rsi"]
-            prev_rsi = snap["prev_rsi"]
-            t_rsi = int(pos.get("target_rsi", snap["target_rsi"]))
-            ret_pct = ((cur_p - ep) / ep * 100.0) if ep > 0 else 0.0
-
-            locked_exit_hit = (snap["date_iso"] == latest_bar_date) and (cur_rsi < t_rsi and prev_rsi >= t_rsi)
-
-            if locked_exit_hit:
-                # İŞLEM KAPANDI -> Yeni al-sat verisini dahil ederek hissenin V/W tipini ve RSI seviyelerini otomatik güncelle!
+    for csym, snap in sorted(stock_snapshots.items(), key=lambda item: item[1]["rsi"]):
+        if snap["is_sell_today"]:
+            new_exit_rsi = snap["target_rsi"]
+            new_entry_rule = snap["entry_rule"]
+            if update_portfolio and is_new_day:
                 recal_res = recalibrate_and_save_stock(snap["symbol"], snap["df_raw"])
+                new_exit_rsi = int(recal_res["exit_rsi"])
+                new_entry_rule = recal_res["rule_summary"]
                 print(
                     f"  🔄 [{csym}] Kapanan işlem verisi eklendi -> Yeni Hibrit Seviyeler: "
-                    f"Çıkış RSI {recal_res['exit_rsi']} | {recal_res['rule_summary']}"
+                    f"Çıkış RSI {new_exit_rsi} | {new_entry_rule}"
                 )
 
-                sell_item = {
-                    "symbol": snap["symbol"],
-                    "clean_symbol": csym,
-                    "date": latest_bar_date,
-                    "entry_date": pos.get("entry_date", ""),
-                    "entry_price": round(ep, 2),
-                    "exit_price": round(cur_p, 2),
-                    "rsi": round(cur_rsi, 1),
-                    "target_rsi": t_rsi,
-                    "return_pct": round(ret_pct, 2),
-                    "new_exit_rsi": int(recal_res["exit_rsi"]),
-                    "new_entry_rule": recal_res["rule_summary"],
-                }
-                sold_today.append(sell_item)
-                sold_symbols_set.add(csym)
+            sell_item = {
+                "symbol": snap["symbol"],
+                "clean_symbol": csym,
+                "date": latest_bar_date,
+                "entry_date": snap["signal_date_iso"],
+                "entry_date_short": snap["signal_date_short"],
+                "entry_price": round(snap["signal_price"], 2),
+                "exit_price": round(snap["price"], 2),
+                "rsi": round(snap["rsi"], 1),
+                "target_rsi": snap["target_rsi"],
+                "return_pct": round(float(snap["signal_diff_pct"] or 0.0), 2),
+                "new_exit_rsi": new_exit_rsi,
+                "new_entry_rule": new_entry_rule,
+            }
+            sold_today.append(sell_item)
+            if update_portfolio and is_new_day:
                 state.setdefault("closed_history", []).append(
                     {
                         **sell_item,
                         "exit_date": latest_bar_date,
-                        "reason": f"Özel Optimum RSI {t_rsi} Kırılımı (+Hibrit Seviye Güncellendi)",
+                        "reason": f"Özel Optimum RSI {snap['target_rsi']} Kırılımı",
                     }
                 )
-            else:
-                pos["last_price"] = round(cur_p, 2)
-                pos["last_rsi"] = round(cur_rsi, 1)
-                pos["target_rsi"] = t_rsi
-                pos["pnl_pct"] = round(ret_pct, 2)
-                still_open.append(pos)
 
-        # 2. ADIM: Boş kontenjan varsa V/W soğuma filtresini geçmiş BIST 30 AL sinyallerinden en düşük RSI'lı olanları seç
-        open_syms_set = {p["clean_symbol"] for p in still_open}
-        available_slots = max(0, max_positions - len(still_open))
-
-        raw_candidates = []
-        for csym, snap in stock_snapshots.items():
-            if (
-                snap["date_iso"] == latest_bar_date
-                and snap["raw_long"]
-                and csym not in open_syms_set
-                and csym not in sold_symbols_set
-            ):
-                raw_candidates.append(snap)
-
-        raw_candidates.sort(key=lambda x: x["rsi"])
-
-        chosen = raw_candidates[:available_slots]
-        overflow = raw_candidates[available_slots:]
-
-        for c in chosen:
+        if snap["is_new_buy_today"]:
             buy_item = {
-                "symbol": c["symbol"],
-                "clean_symbol": c["clean_symbol"],
+                "symbol": snap["symbol"],
+                "clean_symbol": csym,
                 "date": latest_bar_date,
-                "price": round(c["price"], 2),
-                "rsi": round(c["rsi"], 1),
-                "target_rsi": c["target_rsi"],
-                "entry_rule": c["entry_rule"],
-                "win_rate": round(c["win_rate"], 1),
-                "avg_win": round(c["avg_win"], 1),
-                "allocation_pct": allocation_pct,
+                "price": round(snap["price"], 2),
+                "rsi": round(snap["rsi"], 1),
+                "target_rsi": snap["target_rsi"],
+                "entry_rule": snap["entry_rule"],
+                "win_rate": round(snap["win_rate"], 1),
+                "avg_win": round(snap["avg_win"], 1),
             }
             bought_today.append(buy_item)
-            still_open.append(
+
+        if snap["has_active_signal"]:
+            open_positions_now.append(
                 {
-                    "symbol": c["symbol"],
-                    "clean_symbol": c["clean_symbol"],
-                    "entry_date": latest_bar_date,
-                    "entry_price": round(c["price"], 2),
-                    "entry_rsi": round(c["rsi"], 1),
-                    "target_rsi": c["target_rsi"],
-                    "entry_rule": c["entry_rule"],
-                    "allocation_pct": allocation_pct,
-                    "last_price": round(c["price"], 2),
-                    "last_rsi": round(c["rsi"], 1),
-                    "pnl_pct": 0.0,
+                    "symbol": snap["symbol"],
+                    "clean_symbol": csym,
+                    "entry_date": snap["signal_date_iso"],
+                    "entry_date_disp": snap["signal_date_disp"],
+                    "entry_price": round(snap["signal_price"], 2),
+                    "entry_rsi": round(snap["signal_rsi"], 1),
+                    "target_rsi": snap["target_rsi"],
+                    "entry_rule": snap["entry_rule"],
+                    "last_price": round(snap["price"], 2),
+                    "last_rsi": round(snap["rsi"], 1),
+                    "pnl_pct": round(float(snap["signal_diff_pct"] or 0.0), 2),
                 }
             )
 
-        for ov in overflow:
-            skipped_today.append(
-                {
-                    "symbol": ov["symbol"],
-                    "clean_symbol": ov["clean_symbol"],
-                    "price": round(ov["price"], 2),
-                    "rsi": round(ov["rsi"], 1),
-                    "target_rsi": ov["target_rsi"],
-                }
-            )
+    all_stocks_sorted = sorted(stock_snapshots.values(), key=lambda x: x["rsi"])
+    all_stocks_list = [
+        {
+            "symbol": s["symbol"],
+            "clean_symbol": s["clean_symbol"],
+            "price": round(s["price"], 2),
+            "rsi": round(s["rsi"], 1),
+            "target_rsi": s["target_rsi"],
+            "entry_rule": s["entry_rule"],
+            "has_active_signal": s["has_active_signal"],
+            "is_new_buy_today": s["is_new_buy_today"],
+            "is_sell_today": s["is_sell_today"],
+            "signal_date_iso": s["signal_date_iso"],
+            "signal_date_short": s["signal_date_short"],
+            "signal_date_disp": s["signal_date_disp"],
+            "signal_price": round(s["signal_price"], 2) if s["signal_price"] else None,
+            "signal_diff_pct": round(float(s["signal_diff_pct"]), 2) if s["signal_diff_pct"] is not None else None,
+        }
+        for s in all_stocks_sorted
+    ]
 
-        state["open_positions"] = still_open
+    if update_portfolio:
+        state["max_positions"] = 30
+        state["open_positions"] = open_positions_now
         state["last_processed_date"] = latest_bar_date
         state["last_daily_actions"] = {
             "date": latest_bar_date,
             "bought": bought_today,
             "sold": sold_today,
-            "skipped": skipped_today,
+            "skipped": [],
         }
         save_portfolio_state(state)
-
-    else:
-        for pos in state.get("open_positions", []):
-            snap = stock_snapshots.get(pos["clean_symbol"])
-            if snap:
-                ep = float(pos["entry_price"])
-                pos["last_price"] = round(snap["price"], 2)
-                pos["last_rsi"] = round(snap["rsi"], 1)
-                pos["pnl_pct"] = round(((snap["price"] - ep) / ep * 100.0) if ep > 0 else 0.0, 2)
-        if update_portfolio:
-            save_portfolio_state(state)
-
-        last_act = state.get("last_daily_actions", {})
-        if last_act.get("date") == latest_bar_date:
-            bought_today = last_act.get("bought", [])
-            sold_today = last_act.get("sold", [])
-            skipped_today = last_act.get("skipped", [])
 
     if save_charts:
         try:
@@ -339,66 +366,79 @@ def scan_symbols(
         except Exception:
             pass
 
-    print("=" * 76)
-    print(f"  📊 BIST 30 HİBRİT MOD GÜNLÜK RAPOR ({display_date})")
-    print("=" * 76)
+    print("=" * 78)
+    print(f"  📊 BIST 30 GÜNLÜK SİNYAL & AÇIK İŞLEM RAPORU ({display_date})")
+    print("=" * 78)
+    if bought_today:
+        print(f"  🟢 Bugün Yeni AL Sinyali Verenler ({len(bought_today)}):")
+        for b in bought_today:
+            print(
+                f"     - {b['clean_symbol']:<8} Fiyat: {b['price']:.2f} TL | "
+                f"RSI: {b['rsi']:.1f} ➔ Hedef RSI: {b['target_rsi']}"
+            )
     if sold_today:
-        print(f"  🔴 Sepetten SAT Verenler ({len(sold_today)}):")
+        print(f"  🔴 Bugün SAT Sinyali Verenler ({len(sold_today)}):")
         for s in sold_today:
             print(
                 f"     - {s['clean_symbol']:<8} Çıkış: {s['exit_price']:.2f} TL | "
                 f"Kâr: %{s['return_pct']:+.1f} (Hedef RSI {s['target_rsi']})"
             )
-    if bought_today:
-        print(f"  🟢 Sepete Yeni Giren AL Sinyalleri ({len(bought_today)}):")
-        for b in bought_today:
-            print(
-                f"     - {b['clean_symbol']:<8} Fiyat: {b['price']:.2f} TL | "
-                f"RSI: {b['rsi']:.1f} | Hedef RSI: {b['target_rsi']} ({b.get('entry_rule', '')})"
-            )
     if not sold_today and not bought_today:
-        print("  ⚪ Bugün portföy için yeni bir AL veya SAT sinyali oluşmamıştır.")
-    print(f"  💼 Aktif Açık Pozisyon: {len(state.get('open_positions', []))}/{max_positions}")
-    print("=" * 76 + "\n")
+        print("  ⚪ Bugün yeni tetiklenen AL veya SAT sinyali yoktur.")
+    print(f"  📌 Takipteki Açık AL Sinyali Sayısı: {len(open_positions_now)} / {len(all_stocks_list)} Hisse")
+    print("=" * 78 + "\n")
 
     if send_telegram:
         sent_history = _load_sent_history()
-        report_key = f"BIST30_DAILY_{latest_bar_date}"
+        report_key = f"BIST30_TABLE_{latest_bar_date}"
         if force_telegram or report_key not in sent_history.get("sent_reports", []):
             ok = send_bist30_daily_report(
                 date_str=display_date,
                 bought_list=bought_today,
                 sold_list=sold_today,
-                open_positions=state.get("open_positions", []),
-                skipped_list=skipped_today,
-                max_positions=max_positions,
-                allocation_pct=allocation_pct,
+                open_positions=open_positions_now,
+                skipped_list=[],
+                max_positions=30,
+                all_stocks_list=all_stocks_list,
             )
             if ok and report_key not in sent_history.get("sent_reports", []):
                 sent_history.setdefault("sent_reports", []).append(report_key)
                 _save_sent_history(sent_history)
         else:
-            print("[Telegram Bilgi]: Bugünün BIST 30 günlük portföy raporu zaten gönderilmiş, tekrar gönderilmedi.")
+            print("[Telegram Bilgi]: Bugünün BIST 30 günlük tablosu zaten gönderilmiş, tekrar gönderilmedi.")
 
     return {
         "date": latest_bar_date,
         "display_date": display_date,
         "buy": bought_today,
         "sell": sold_today,
-        "skipped": skipped_today,
-        "open_positions": state.get("open_positions", []),
+        "skipped": [],
+        "open_positions": open_positions_now,
+        "all_stocks_list": all_stocks_list,
         "all_bist30": [
             {
+                "Sıra": idx,
                 "Hisse": s["clean_symbol"],
                 "Fiyat (TL)": round(s["price"], 2),
-                "Güncel RSI": round(s["rsi"], 1),
-                "Özel Çıkış Hedefi": f"RSI {s['target_rsi']}",
+                "Güncel 1G RSI": round(s["rsi"], 1),
+                "Hedef Çıkış RSI": f"RSI {s['target_rsi']}",
+                "Sinyal Durumu": (
+                    "🚀 BUGÜN YENİ AL"
+                    if s["is_new_buy_today"]
+                    else (
+                        "🔴 BUGÜN SAT"
+                        if s["is_sell_today"]
+                        else ("🟢 Açık Sinyal" if s["has_active_signal"] else "⚪ Sinyal Yok")
+                    )
+                ),
+                "Son AL Sinyal Tarihi": s["signal_date_disp"] if (s["has_active_signal"] or s["is_sell_today"]) else "Yok",
+                "Sinyal Fiyatı (TL)": round(s["signal_price"], 2) if (s["has_active_signal"] or s["is_sell_today"]) else "-",
+                "Sinyalden Fark (%)": (
+                    f"%{s['signal_diff_pct']:+.2f}" if s["signal_diff_pct"] is not None else "-"
+                ),
                 "Hibrit Giriş / Soğuma Kuralı (V/W)": s["entry_rule"],
-                "2020+ Getiri (%)": round(s["total_return_pct"], 1),
-                "Kazanma (%)": round(s["win_rate"], 1),
-                "Ham Sinyal": "🟢 AL" if s["raw_long"] else ("🔴 RSI Kırılımı" if s["raw_exit"] else "⚪ İzlemede"),
             }
-            for s in sorted(stock_snapshots.values(), key=lambda x: x["clean_symbol"])
+            for idx, s in enumerate(all_stocks_sorted, 1)
         ],
     }
 

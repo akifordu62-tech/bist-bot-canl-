@@ -1,7 +1,8 @@
 """
-Telegram Bildirim Modülü (V8.0 - BIST 30 | Hibrit Özel Mod V/W Soğuma & Çıkış RSI | Maks. 5 Hisse Portföy)
-- Sadece BIST 30 ve 5 hisse kontenjanına göre tek bir toplu günlük portföy raporu gönderir.
-- SAT gerçekleştiğinde yeni kapanan işlem verisiyle güncellenen V/W tipini ve özel RSI seviyelerini de raporlar.
+Telegram Bildirim Modülü (V8.0 - BIST 30 | Hibrit Özel Mod V/W Soğuma & Çıkış RSI | 30 Hisse Tam Tablo)
+- 5 hisse sınırı olmadan tüm BIST 30 hisselerinin güncel sinyal durumunu,
+  varsa ne zaman sinyal geldiğini ve sinyal fiyatından yüzde kaç eksi/artıda olduğunu tablo halinde gönderir.
+- O gün yeni AL veya SAT sinyali varsa en üstte ayrıca vurgular.
 """
 import os
 from typing import List, Dict, Any
@@ -58,125 +59,154 @@ def send_telegram_message(text: str, token: str = None, chat_id: str = None) -> 
 
 def format_bist30_daily_report(
     date_str: str,
-    bought_list: List[Dict[str, Any]],
-    sold_list: List[Dict[str, Any]],
-    open_positions: List[Dict[str, Any]],
+    bought_list: List[Dict[str, Any]] = None,
+    sold_list: List[Dict[str, Any]] = None,
+    open_positions: List[Dict[str, Any]] = None,
     skipped_list: List[Dict[str, Any]] = None,
-    max_positions: int = 5,
+    max_positions: int = 30,
     allocation_pct: float = 10.0,
+    all_stocks_list: List[Dict[str, Any]] = None,
 ) -> str:
     """
-    BIST 30 + Maksimum 5 Hisse (%10 Alım) + Hibrit Özel Mod (V/W Soğuma & Çıkış RSI) kurallarına göre
-    tek toplu Telegram mesajını oluşturur.
+    5 hisse sınırı olmadan BIST 30 hisselerinin tamamı için:
+    1) Bugün yeni gelen AL ve SAT sinyallerini,
+    2) 30 hissenin tamamının güncel fiyat, RSI/Hedef RSI, Sinyal Tarihi ve Sinyalden % Fark tablosunu oluşturur.
     """
-    skipped_list = skipped_list or []
-    has_action = bool(bought_list or sold_list)
-    open_cnt = len(open_positions)
-    empty_slots = max(0, max_positions - open_cnt)
-    stock_exposure = int(open_cnt * allocation_pct)
-    cash_exposure = max(0, 100 - stock_exposure)
+    bought_list = bought_list or []
+    sold_list = sold_list or []
+    open_positions = open_positions or []
+    all_stocks_list = all_stocks_list or []
 
     lines = [
-        "📊 <b>BIST 30 PORTFÖY & SİNYAL RAPORU</b>",
-        f"📅 <b>Tarih:</b> {date_str} | <b>Mod:</b> Hibrit Özel Mod (V/W Soğuma & Çıkış RSI)",
+        "📊 <b>BIST 30 GÜNLÜK SİNYAL & AÇIK İŞLEM TABLOSU</b>",
+        f"📅 <b>Tarih:</b> {date_str} | <b>Periyot:</b> 1 Günlük (Orijinal V8.0)",
         "━━━━━━━━━━━━━━━━━━━━",
     ]
 
-    if not has_action:
-        lines.append("⚪ <b>Bugün sinyal olmamıştır.</b>")
-        if open_cnt >= max_positions and skipped_list:
-            skipped_names = ", ".join(f"#{x['clean_symbol']}" for x in skipped_list)
+    # 1. BÖLÜM: BUGÜN YENİ TETİKLENEN AL / SAT SİNYALLERİ
+    if bought_list:
+        lines.append(f"🟢 <b>BUGÜN YENİ AL SİNYALİ VERENLER ({len(bought_list)} Hisse):</b>")
+        for b in sorted(bought_list, key=lambda x: float(x.get("rsi", 50.0))):
             lines.append(
-                f"🔒 <i>Portföy kontenjanı dolu ({open_cnt}/{max_positions}) olduğu için yeni alım yapılmamıştır "
-                f"(Pas geçilen: {skipped_names}). Sepetteki hisselerde SAT sinyali yoktur.</i>"
+                f"• <b>#{b['clean_symbol']}</b> | Fiyat: {b['price']:.2f} TL | "
+                f"RSI: {b['rsi']:.1f} ➔ Hedef: <b>RSI {b['target_rsi']}</b>"
             )
-        else:
-            lines.append(
-                "<i>BIST 30 portföyünüz için bugün yeni bir AL veya açık hisselerinizde SAT sinyali oluşmadı.</i>"
-            )
-    else:
-        if sold_list:
-            lines.append("\n🔴 <b>SATIŞ SİNYALİ (Sepetten Çıkanlar):</b>")
-            for s in sold_list:
-                ret_val = float(s.get("return_pct", 0.0))
-                sign = "+" if ret_val >= 0 else ""
-                lines.append(
-                    f"• <b>#{s['clean_symbol']}</b> | Çıkış: {s['exit_price']:.2f} TL "
-                    f"(Giriş: {s['entry_price']:.2f} TL | <b>%{sign}{ret_val:.1f}</b>)"
-                )
-                lines.append(
-                    f"  ↳ Güncel RSI: {s['rsi']:.1f} (Kilitli Hedef <b>RSI {s['target_rsi']}</b> aşağı kırıldı)"
-                )
-                if s.get("new_exit_rsi"):
-                    lines.append(
-                        f"  ↳ 🔄 <i>Yeni işlem verisi eklendi ➔ Sonraki Hedef: RSI {s['new_exit_rsi']} "
-                        f"({s.get('new_entry_rule', '')})</i>"
-                    )
 
+    if sold_list:
         if bought_list:
-            lines.append(f"\n🟢 <b>YENİ ALIM SİNYALİ (Sepete Girenler - %{allocation_pct:.0f} Pay):</b>")
-            for b in bought_list:
-                wr_txt = f"%{b['win_rate']:.1f}" if b.get("win_rate") is not None else "-"
-                aw_txt = f"%{b['avg_win']:.1f}" if b.get("avg_win") is not None else "-"
-                rule_txt = b.get("entry_rule", "")
-                lines.append(
-                    f"• <b>#{b['clean_symbol']}</b> | Fiyat: {b['price']:.2f} TL | RSI: {b['rsi']:.1f}"
-                )
-                lines.append(
-                    f"  ↳ Kilitli Çıkış Hedefi: <b>RSI {b['target_rsi']}</b> | Başarı: {wr_txt} (Ort. Kâr: {aw_txt})"
-                )
-                if rule_txt:
-                    lines.append(f"  ↳ 🛡️ <i>Hibrit Filtre: {rule_txt}</i>")
-
-        if skipped_list:
-            skipped_names = ", ".join(f"#{x['clean_symbol']} (RSI {x['rsi']:.1f})" for x in skipped_list)
+            lines.append("")
+        lines.append(f"🔴 <b>BUGÜN SAT SİNYALİ VERENLER ({len(sold_list)} Hisse):</b>")
+        for s in sold_list:
+            ret_val = float(s.get("return_pct", 0.0))
+            sign = "+" if ret_val >= 0 else ""
+            s_dt = s.get("entry_date_short") or s.get("entry_date", "-")
             lines.append(
-                f"\n🔒 <i>5 hisse sınırı dolduğu için alınmayan diğer BIST 30 sinyalleri: {skipped_names}</i>"
+                f"• <b>#{s['clean_symbol']}</b> | {s['entry_price']:.2f} ➔ {s['exit_price']:.2f} TL "
+                f"(<b>%{sign}{ret_val:.1f}</b> | Sinyal: {s_dt} | Hedef RSI {s['target_rsi']} Kırıldı)"
             )
 
-    lines.append("\n━━━━━━━━━━━━━━━━━━━━")
+    if not bought_list and not sold_list:
+        lines.append("⚪ <b>Bugün Yeni Sinyal:</b> Bugün yeni tetiklenen AL veya SAT sinyali yoktur.")
+
+    # 2. BÖLÜM: TÜM BIST 30 HİSSELERİ GÜNCEL DURUM TABLOSU (1G RSI EN DÜŞÜKTEN SIRALI)
+    # Eğer all_stocks_list verilmemişse open_positions üzerinden yedek tablo kur
+    table_items = list(all_stocks_list) if all_stocks_list else []
+    if not table_items and open_positions:
+        for p in open_positions:
+            ep = float(p.get("entry_price", 0.0))
+            lp = float(p.get("last_price", ep))
+            diff = ((lp - ep) / ep * 100.0) if ep > 0 else 0.0
+            ed = str(p.get("entry_date", ""))
+            ed_short = f"{ed[8:10]}.{ed[5:7]}" if len(ed) >= 10 else (ed or "AÇIK")
+            table_items.append(
+                {
+                    "clean_symbol": p["clean_symbol"],
+                    "price": lp,
+                    "rsi": float(p.get("last_rsi", p.get("entry_rsi", 50.0))),
+                    "target_rsi": int(p.get("target_rsi", 72)),
+                    "has_active_signal": True,
+                    "signal_date_short": ed_short,
+                    "signal_diff_pct": diff,
+                    "is_new_buy_today": False,
+                    "is_sell_today": False,
+                }
+            )
+
+    table_items.sort(key=lambda x: float(x.get("rsi", 50.0)))
+
+    active_cnt = sum(1 for x in table_items if x.get("has_active_signal"))
+    cheaper_list = [
+        x for x in table_items
+        if x.get("has_active_signal") and x.get("signal_diff_pct") is not None and float(x["signal_diff_pct"]) <= 0.0
+    ]
+
+    lines.append("")
     lines.append(
-        f"💼 <b>AKTİF SEPET ({open_cnt}/{max_positions} Hisse | %{stock_exposure} Borsa - %{cash_exposure} Nakit):</b>"
+        f"📋 <b>BIST 30 TAM TABLO (RSI Ucuzdan Pahalıya | Açık Sinyal: {active_cnt}/{len(table_items)}):</b>"
     )
 
-    if open_positions:
-        bought_syms = {b["clean_symbol"] for b in bought_list}
-        for idx, pos in enumerate(open_positions, 1):
-            csym = pos["clean_symbol"]
-            ep = float(pos["entry_price"])
-            lp = float(pos.get("last_price", ep))
-            lrsi = float(pos.get("last_rsi", pos.get("entry_rsi", 50.0)))
-            trsi = int(pos["target_rsi"])
-            pnl = float(pos.get("pnl_pct", ((lp - ep) / ep * 100.0) if ep > 0 else 0.0))
-            sign = "+" if pnl >= 0 else ""
+    pre_lines = [
+        "#  HİSSE  FİYAT  RSI>HD SİNYAL  FARK%",
+        "─────────────────────────────────────",
+    ]
 
-            if csym in bought_syms:
-                lines.append(
-                    f"{idx}. <b>#{csym}</b> | {lp:.2f} TL (<b>Yeni Eklendi</b>) | RSI: {lrsi:.1f} / Hedef: {trsi}"
-                )
+    for idx, item in enumerate(table_items, 1):
+        sym = str(item.get("clean_symbol", ""))[:5].ljust(5)
+        price = float(item.get("price", 0.0))
+        if price >= 100.0:
+            p_str = f"{price:6.1f}"
+        elif price >= 10.0:
+            p_str = f"{price:6.2f}"
+        else:
+            p_str = f"{price:6.2f}"
+
+        rsi_int = int(round(float(item.get("rsi", 50.0))))
+        trsi_int = int(item.get("target_rsi", 72))
+        rsi_str = f"{rsi_int:2d}>{trsi_int:2d}"
+
+        if item.get("is_sell_today"):
+            sig_str = " SAT! "
+            diff_val = float(item.get("signal_diff_pct", 0.0) or 0.0)
+            diff_str = f"{diff_val:+5.1f}%"
+        elif item.get("has_active_signal"):
+            if item.get("is_new_buy_today"):
+                sig_str = "BUGÜN "
             else:
-                lines.append(
-                    f"{idx}. <b>#{csym}</b> | {ep:.2f} ➔ {lp:.2f} TL (<b>%{sign}{pnl:.1f}</b>) | RSI: {lrsi:.1f} / Hedef: {trsi}"
-                )
-    else:
-        lines.append("• <i>Şu an sepette açık hisse bulunmuyor (%100 Nakit / Mevduat).</i>")
+                s_short = str(item.get("signal_date_short", "AÇIK"))[:5]
+                sig_str = f"{s_short:<6}"
+            diff_val = float(item.get("signal_diff_pct", 0.0) or 0.0)
+            diff_str = f"{diff_val:+5.1f}%"
+        else:
+            sig_str = " YOK  "
+            diff_str = "   -  "
 
-    if empty_slots > 0:
-        lines.append(f"⚪ <i>Boş Kontenjan: {empty_slots} Hisse (Yeni BIST 30 sinyaline hazır)</i>")
-    else:
-        lines.append("🔒 <i>Kontenjan Dolu (5/5): Bir hisse hedefe ulaşıp satılana kadar yeni AL gelmez.</i>")
+        pre_lines.append(f"{idx:02d} {sym} {p_str}  {rsi_str} {sig_str} {diff_str}")
+
+    lines.append("<pre>" + "\n".join(pre_lines) + "</pre>")
+
+    if cheaper_list:
+        cheap_txt = ", ".join(
+            f"<b>#{x['clean_symbol']}</b> (%{float(x['signal_diff_pct']):+.1f})"
+            for x in cheaper_list
+        )
+        lines.append(f"🟢 <b>Sinyal Fiyatından Ucuz Olanlar ({len(cheaper_list)}):</b> {cheap_txt}")
+
+    no_sig_list = [x["clean_symbol"] for x in table_items if not x.get("has_active_signal") and not x.get("is_sell_today")]
+    if no_sig_list:
+        lines.append(f"⚪ <b>Sinyali Olmayan / Beklemedekiler ({len(no_sig_list)}):</b> " + ", ".join(f"#{s}" for s in no_sig_list))
 
     return "\n".join(lines)
 
 
 def send_bist30_daily_report(
     date_str: str,
-    bought_list: List[Dict[str, Any]],
-    sold_list: List[Dict[str, Any]],
-    open_positions: List[Dict[str, Any]],
+    bought_list: List[Dict[str, Any]] = None,
+    sold_list: List[Dict[str, Any]] = None,
+    open_positions: List[Dict[str, Any]] = None,
     skipped_list: List[Dict[str, Any]] = None,
-    max_positions: int = 5,
+    max_positions: int = 30,
     allocation_pct: float = 10.0,
+    all_stocks_list: List[Dict[str, Any]] = None,
 ) -> bool:
     msg = format_bist30_daily_report(
         date_str=date_str,
@@ -186,21 +216,21 @@ def send_bist30_daily_report(
         skipped_list=skipped_list,
         max_positions=max_positions,
         allocation_pct=allocation_pct,
+        all_stocks_list=all_stocks_list,
     )
     return send_telegram_message(msg)
 
 
 def test_telegram_connection(token: str = None, chat_id: str = None) -> bool:
     """
-    Telegram ayarlarını V8.0 (Hibrit Özel Mod V/W Soğuma & Otomatik Öğrenme) formatıyla test eder.
+    Telegram ayarlarını V8.0 (BIST 30 Tam Tablo & Açık Sinyal Takibi) formatıyla test eder.
     """
     msg = (
-        "🤖 <b>BIST 30 HİBRİT ÖZEL MOD (V8.0) PORTFÖY BOTU AKTİF!</b>\n"
+        "🤖 <b>BIST 30 SİNYAL & AÇIK İŞLEM TAKİP BOTU (V8.0) AKTİF!</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "✅ <b>Kapsam:</b> Sadece BIST 30 Şirketleri\n"
-        "✅ <b>Strateji:</b> Hibrit Özel Mod — Hisseye Göre V-Tipi / W-Tipi Soğuma + Özel Çıkış RSI\n"
-        "✅ <b>Canlı Öğrenme:</b> Her kapanan işlem (SAT) sonrası V/W tipi ve RSI seviyeleri otomatik güncellenir\n"
-        "✅ <b>Portföy Kuralı:</b> Maksimum 5 Açık Hisse (%10 Pay / Hisse)"
+        "✅ <b>Kapsam:</b> Tüm BIST 30 Şirketleri (30 Hisse — 5 Hisse Sınırı Yok)\n"
+        "✅ <b>Günlük Bildirim:</b> O gün yeni AL / SAT sinyali verenler + 30 hissenin tamamı için sinyal tarihi ve sinyalden % eksi/artı tablosu\n"
+        "✅ <b>Strateji:</b> Orijinal V8.0 (1 Günlük Grafik — Hisseye Özel V/W Soğuma + Çıkış RSI)"
     )
     return send_telegram_message(msg, token=token, chat_id=chat_id)
 
