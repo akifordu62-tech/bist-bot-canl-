@@ -155,57 +155,47 @@ def scan_symbols(
         close_price = float(last_row["Close"])
         rsi_val = float(last_row["RSI"])
         target_rsi = int(last_row["Optimal_RSI_Exit"])
-        raw_long = bool(last_row["Raw_Long_Condition"]) or bool(last_row["Trade_Entry"])
-        raw_exit = bool(last_row["Raw_Exit_Condition"]) or bool(last_row["Exit_Signal"])
+        raw_long = bool(last_row["Trade_Entry"])
+        raw_exit = bool(last_row["Exit_Signal"])
+        in_pos_now = bool(last_row["Position"] == 1)
 
-        # Son AL ve son SAT sinyal indekslerini bul
-        long_mask = (
-            df_strat["Raw_Long_Condition"].fillna(False).to_numpy(dtype=bool)
-            | df_strat["Trade_Entry"].fillna(False).to_numpy(dtype=bool)
-        )
-        exit_mask = (
-            df_strat["Raw_Exit_Condition"].fillna(False).to_numpy(dtype=bool)
-            | df_strat["Exit_Signal"].fillna(False).to_numpy(dtype=bool)
-        )
-        long_indices = np.where(long_mask)[0]
+        # Son SAT sonrası gelen İLK AL sinyali (Trade_Entry) ve gerçek çıkış (Exit_Signal) indeksleri
+        entry_mask = df_strat["Trade_Entry"].fillna(False).to_numpy(dtype=bool)
+        exit_mask = df_strat["Exit_Signal"].fillna(False).to_numpy(dtype=bool)
+        entry_indices = np.where(entry_mask)[0]
         exit_indices = np.where(exit_mask)[0]
 
-        last_long_idx = int(long_indices[-1]) if len(long_indices) > 0 else -1
+        last_entry_idx = int(entry_indices[-1]) if len(entry_indices) > 0 else -1
         last_exit_idx = int(exit_indices[-1]) if len(exit_indices) > 0 else -1
 
         is_new_buy_today = (bar_date_iso == latest_bar_date) and raw_long
+        is_sell_today = (bar_date_iso == latest_bar_date) and raw_exit and (last_entry_idx >= 0)
 
-        # Bugün SAT verip kapanan açık bir sinyal var mı?
-        was_active_before_today = False
-        if len(long_indices) > 0:
-            prev_exits = exit_indices[exit_indices < (len(df_strat) - 1)]
-            prev_last_exit = int(prev_exits[-1]) if len(prev_exits) > 0 else -1
-            prev_longs = long_indices[long_indices < (len(df_strat) - 1)]
-            prev_last_long = int(prev_longs[-1]) if len(prev_longs) > 0 else -1
-            if prev_last_long > prev_last_exit:
-                was_active_before_today = True
-
-        is_sell_today = (bar_date_iso == latest_bar_date) and raw_exit and was_active_before_today
-
-        if last_long_idx > last_exit_idx:
+        if in_pos_now and last_entry_idx >= 0:
             has_active_signal = True
-            sig_ts = df_strat.index[last_long_idx]
+            sig_ts = df_strat.index[last_entry_idx]
             signal_date_iso = sig_ts.strftime("%Y-%m-%d")
-            signal_date_short = sig_ts.strftime("%d.%m")
+            signal_date_short = (
+                sig_ts.strftime("%d.%m")
+                if sig_ts.year == df_strat.index[-1].year
+                else sig_ts.strftime("%m/%y")
+            )
             signal_date_disp = sig_ts.strftime("%d.%m.%Y")
-            signal_price = float(df_strat["Close"].iloc[last_long_idx])
-            signal_rsi = float(df_strat["RSI"].iloc[last_long_idx])
+            signal_price = float(df_strat["Close"].iloc[last_entry_idx])
+            signal_rsi = float(df_strat["RSI"].iloc[last_entry_idx])
             signal_diff_pct = ((close_price - signal_price) / signal_price * 100.0) if signal_price > 0 else 0.0
-        elif is_sell_today:
+        elif is_sell_today and last_entry_idx >= 0:
             has_active_signal = False
-            prev_longs = long_indices[long_indices < last_exit_idx]
-            entry_idx = int(prev_longs[-1]) if len(prev_longs) > 0 else last_long_idx
-            sig_ts = df_strat.index[entry_idx]
+            sig_ts = df_strat.index[last_entry_idx]
             signal_date_iso = sig_ts.strftime("%Y-%m-%d")
-            signal_date_short = sig_ts.strftime("%d.%m")
+            signal_date_short = (
+                sig_ts.strftime("%d.%m")
+                if sig_ts.year == df_strat.index[-1].year
+                else sig_ts.strftime("%m/%y")
+            )
             signal_date_disp = sig_ts.strftime("%d.%m.%Y")
-            signal_price = float(df_strat["Close"].iloc[entry_idx])
-            signal_rsi = float(df_strat["RSI"].iloc[entry_idx])
+            signal_price = float(df_strat["Close"].iloc[last_entry_idx])
+            signal_rsi = float(df_strat["RSI"].iloc[last_entry_idx])
             signal_diff_pct = ((close_price - signal_price) / signal_price * 100.0) if signal_price > 0 else 0.0
         else:
             has_active_signal = False
