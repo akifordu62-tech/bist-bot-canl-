@@ -35,6 +35,31 @@ OPTIMAL_RSI_MAP = {
     "TURSG": 77, "ULKER": 78, "VESTL": 75, "ZOREN": 78,
 }
 
+# BIST 30 Bilanço / Haber Akışı Negatif Olan Hisseler (Düzelene Kadar Uyarı Listesi)
+BIST30_RISK_NOTES = {
+    # 1. Derece Riskli (Net Zarar Açıklayan / Ağır Bilanço & Haber Baskısı)
+    "PETKM": "🔴 ZARARDA (FAVÖK ve Net Zarar | Etilen-Nafta makası darlığı)",
+    "SASA": "🔴 ZARARDA (Net Marj -%15,7 | Yüksek borç ve pay arz baskısı)",
+    "EKGYO": "🔴 ZARARDA (Net Marj -%4,6, Kâr -%87 | Yüksek faiz & TMS-29)",
+    "PGSUS": "🔴 ZARARDA (Net Marj -%0,8 | Artan personel/bakım maliyetleri)",
+    # 2. Derece Dikkat (Zararda Olmayan Ama Kârı Sert Düşen / Sektörel Baskılı)
+    "SISE": "🟡 ZAYIF BİLANÇO (Reel ciro -%12, ROE %3,2 | Cam/soda talebi zayıf)",
+    "FROTO": "🟡 KÂR DARALMASI (Net kâr -%45, Ciro -%14 | Avrupa pazar daralması)",
+    "MGROS": "🟡 KÂR DARALMASI (Net kâr -%56, Marj %1,5 | Maliyet & denetim haberleri)",
+    "ENKAI": "🟡 KÂR DARALMASI (Net kâr -%70 | TMS-29 & değerleme etkisi)",
+    "TRMET": "🟡 KÂR DARALMASI (Net kâr -%35 | TMS-29 parasal kayıp etkisi)",
+    "TRALT": "🟡 KÂR DARALMASI (Net kâr -%26 | Üretim düşüşü & TMS-29 etkisi)",
+    "GUBRF": "🟡 KÂR DARALMASI (Net kâr -%15 | Gübre marj baskısı)",
+}
+
+
+def get_stock_risk_note(symbol: Optional[str] = None) -> str:
+    if not symbol:
+        return ""
+    clean = symbol.replace(".IS", "").strip().upper()
+    return BIST30_RISK_NOTES.get(clean, "")
+
+
 
 def load_optimal_params() -> Dict[str, Dict[str, Any]]:
     """

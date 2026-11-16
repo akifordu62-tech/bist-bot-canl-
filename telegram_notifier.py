@@ -7,7 +7,7 @@ Telegram Bildirim Modülü (V8.0 - BIST 30 | Hibrit Özel Mod V/W Soğuma & Çı
 import os
 from typing import List, Dict, Any
 import requests
-from config import TELEGRAM_CONFIG
+from config import TELEGRAM_CONFIG, get_stock_risk_note
 
 
 def send_telegram_message(text: str, token: str = None, chat_id: str = None) -> bool:
@@ -151,7 +151,9 @@ def format_bist30_daily_report(
     ]
 
     for idx, item in enumerate(table_items, 1):
-        sym = str(item.get("clean_symbol", ""))[:5].ljust(5)
+        csym_raw = str(item.get("clean_symbol", "")).strip().upper()
+        risk_note = get_stock_risk_note(csym_raw)
+        sym_col = (f"{csym_raw[:5]}!" if risk_note else csym_raw[:5]).ljust(6)
         price = float(item.get("price", 0.0))
         if price >= 100.0:
             p_str = f"{price:6.1f}"
@@ -180,16 +182,26 @@ def format_bist30_daily_report(
             sig_str = " YOK  "
             diff_str = "   -  "
 
-        pre_lines.append(f"{idx:02d} {sym} {p_str}  {rsi_str} {sig_str} {diff_str}")
+        pre_lines.append(f"{idx:02d} {sym_col}{p_str}  {rsi_str} {sig_str} {diff_str}")
 
     lines.append("<pre>" + "\n".join(pre_lines) + "</pre>")
 
-    if cheaper_list:
+    clean_cheaper = [x for x in cheaper_list if not get_stock_risk_note(x.get("clean_symbol"))]
+    if clean_cheaper:
         cheap_txt = ", ".join(
             f"<b>#{x['clean_symbol']}</b> (%{float(x['signal_diff_pct']):+.1f})"
-            for x in cheaper_list
+            for x in clean_cheaper
         )
-        lines.append(f"🟢 <b>Sinyal Fiyatından Ucuz Olanlar ({len(cheaper_list)}):</b> {cheap_txt}")
+        lines.append(f"🟢 <b>Sinyalden Ucuz & Bilançosu Sağlam ({len(clean_cheaper)}):</b> {cheap_txt}")
+
+    risky_items = [x for x in table_items if get_stock_risk_note(x.get("clean_symbol"))]
+    if risky_items:
+        lines.append("")
+        lines.append(f"⚠️ <b>BİLANÇO / HABER AKIŞI KÖTÜ OLANLAR ('!' İşaretliler — Düzelene Kadar Dikkat):</b>")
+        for rx in risky_items:
+            rc = rx["clean_symbol"]
+            rnote = get_stock_risk_note(rc)
+            lines.append(f"• <b>#{rc}!</b> ➔ {rnote}")
 
     no_sig_list = [x["clean_symbol"] for x in table_items if not x.get("has_active_signal") and not x.get("is_sell_today")]
     if no_sig_list:

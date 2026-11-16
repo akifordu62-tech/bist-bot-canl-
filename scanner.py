@@ -24,6 +24,7 @@ from config import (
     PORTFOLIO_CONFIG,
     get_stock_params,
     format_stock_entry_rule,
+    get_stock_risk_note,
 )
 from strategy import run_strategy, recalibrate_and_save_stock
 from bist_symbols import BIST_30_SYMBOLS, is_bist30
@@ -426,6 +427,7 @@ def scan_symbols(
                 "Sinyalden Fark (%)": (
                     f"%{s['signal_diff_pct']:+.2f}" if s["signal_diff_pct"] is not None else "-"
                 ),
+                "Bilanço / Haber Durumu": get_stock_risk_note(s["clean_symbol"]) or "🟢 Sağlam",
                 "Hibrit Giriş / Soğuma Kuralı (V/W)": s["entry_rule"],
             }
             for idx, s in enumerate(all_stocks_sorted, 1)
