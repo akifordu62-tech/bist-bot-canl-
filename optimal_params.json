@@ -393,7 +393,7 @@
     "max_buy_rsi": 65.0,
     "cooldown_bars": 8,
     "no_higher_bars": 0,
-    "calibrated_at": "2026-11-14"
+    "calibrated_at": "2026-11-16"
   },
   "GLRMK": {
     "exit_rsi": 74,
