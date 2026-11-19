@@ -2,8 +2,8 @@
   "universe": "BIST30",
   "max_positions": 30,
   "allocation_pct": 10.0,
-  "updated_at": "2026-11-18 22:41",
-  "last_processed_date": "2026-11-17",
+  "updated_at": "2026-11-19 22:45",
+  "last_processed_date": "2026-11-18",
   "last_calibrated_month": "2026-11",
   "open_positions": [
     {
@@ -15,22 +15,9 @@
       "entry_rsi": 49.9,
       "target_rsi": 69,
       "entry_rule": "V-Tipi (RSI ≤ 52 Soğuma + İlk Dönüş) | Alım RSI < 60",
-      "last_price": 16.18,
-      "last_rsi": 34.8,
-      "pnl_pct": -24.88
-    },
-    {
-      "symbol": "GUBRF.IS",
-      "clean_symbol": "GUBRF",
-      "entry_date": "2026-06-02",
-      "entry_date_disp": "02.06.2026",
-      "entry_price": 544.41,
-      "entry_rsi": 49.5,
-      "target_rsi": 72,
-      "entry_rule": "Trend Filtreli (Alım RSI < 65 | 8g Bekle)",
-      "last_price": 282.75,
-      "last_rsi": 37.8,
-      "pnl_pct": -48.06
+      "last_price": 15.4,
+      "last_rsi": 30.2,
+      "pnl_pct": -28.51
     },
     {
       "symbol": "SASA.IS",
@@ -41,22 +28,22 @@
       "entry_rsi": 41.2,
       "target_rsi": 78,
       "entry_rule": "V-Tipi (RSI ≤ 45 Soğuma + İlk Dönüş) | Alım RSI < 65",
-      "last_price": 1.56,
-      "last_rsi": 39.3,
-      "pnl_pct": -38.1
+      "last_price": 1.5,
+      "last_rsi": 35.4,
+      "pnl_pct": -40.48
     },
     {
-      "symbol": "AEFES.IS",
-      "clean_symbol": "AEFES",
-      "entry_date": "2026-03-17",
-      "entry_date_disp": "17.03.2026",
-      "entry_price": 17.42,
-      "entry_rsi": 42.6,
-      "target_rsi": 76,
-      "entry_rule": "W-Tipi (Önce RSI ≤ 45 ➔ Sonra Kriter) | Alım RSI < 65",
-      "last_price": 16.26,
-      "last_rsi": 40.4,
-      "pnl_pct": -6.65
+      "symbol": "GUBRF.IS",
+      "clean_symbol": "GUBRF",
+      "entry_date": "2026-06-02",
+      "entry_date_disp": "02.06.2026",
+      "entry_price": 544.41,
+      "entry_rsi": 49.5,
+      "target_rsi": 72,
+      "entry_rule": "Trend Filtreli (Alım RSI < 65 | 8g Bekle)",
+      "last_price": 276.25,
+      "last_rsi": 36.1,
+      "pnl_pct": -49.26
     },
     {
       "symbol": "SAHOL.IS",
@@ -67,9 +54,22 @@
       "entry_rsi": 36.7,
       "target_rsi": 78,
       "entry_rule": "W-Tipi (Önce RSI ≤ 55 ➔ Sonra Kriter) | Alım RSI < 60",
-      "last_price": 83.0,
-      "last_rsi": 42.1,
-      "pnl_pct": -10.09
+      "last_price": 80.6,
+      "last_rsi": 37.2,
+      "pnl_pct": -12.69
+    },
+    {
+      "symbol": "AEFES.IS",
+      "clean_symbol": "AEFES",
+      "entry_date": "2026-03-17",
+      "entry_date_disp": "17.03.2026",
+      "entry_price": 17.42,
+      "entry_rsi": 42.6,
+      "target_rsi": 76,
+      "entry_rule": "W-Tipi (Önce RSI ≤ 45 ➔ Sonra Kriter) | Alım RSI < 65",
+      "last_price": 16.1,
+      "last_rsi": 38.6,
+      "pnl_pct": -7.57
     },
     {
       "symbol": "SISE.IS",
@@ -80,48 +80,9 @@
       "entry_rsi": 53.5,
       "target_rsi": 74,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
-      "last_price": 34.3,
-      "last_rsi": 42.9,
-      "pnl_pct": -24.47
-    },
-    {
-      "symbol": "EREGL.IS",
-      "clean_symbol": "EREGL",
-      "entry_date": "2026-05-20",
-      "entry_date_disp": "20.05.2026",
-      "entry_price": 38.12,
-      "entry_rsi": 63.3,
-      "target_rsi": 71,
-      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
-      "last_price": 31.86,
-      "last_rsi": 43.3,
-      "pnl_pct": -16.43
-    },
-    {
-      "symbol": "ASTOR.IS",
-      "clean_symbol": "ASTOR",
-      "entry_date": "2026-06-11",
-      "entry_date_disp": "11.06.2026",
-      "entry_price": 291.65,
-      "entry_rsi": 47.5,
-      "target_rsi": 78,
-      "entry_rule": "Trend Filtreli (Alım RSI < 52)",
-      "last_price": 160.0,
-      "last_rsi": 43.8,
-      "pnl_pct": -45.14
-    },
-    {
-      "symbol": "TUPRS.IS",
-      "clean_symbol": "TUPRS",
-      "entry_date": "2026-09-17",
-      "entry_date_disp": "17.09.2026",
-      "entry_price": 404.75,
-      "entry_rsi": 64.5,
-      "target_rsi": 78,
-      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
-      "last_price": 345.25,
-      "last_rsi": 44.2,
-      "pnl_pct": -14.7
+      "last_price": 33.58,
+      "last_rsi": 39.8,
+      "pnl_pct": -26.05
     },
     {
       "symbol": "TRALT.IS",
@@ -132,22 +93,9 @@
       "entry_rsi": 48.2,
       "target_rsi": 74,
       "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
-      "last_price": 37.84,
-      "last_rsi": 45.2,
-      "pnl_pct": -27.09
-    },
-    {
-      "symbol": "KRDMD.IS",
-      "clean_symbol": "KRDMD",
-      "entry_date": "2026-06-08",
-      "entry_date_disp": "08.06.2026",
-      "entry_price": 39.0,
-      "entry_rsi": 48.9,
-      "target_rsi": 77,
-      "entry_rule": "Trend Filtreli (Alım RSI < 65 | 10g Bekle)",
-      "last_price": 38.52,
-      "last_rsi": 46.1,
-      "pnl_pct": -1.23
+      "last_price": 35.96,
+      "last_rsi": 40.0,
+      "pnl_pct": -30.72
     },
     {
       "symbol": "KCHOL.IS",
@@ -158,61 +106,48 @@
       "entry_rsi": 45.7,
       "target_rsi": 78,
       "entry_rule": "W-Tipi (Önce RSI ≤ 52 ➔ Sonra Kriter) | Alım RSI < 52",
-      "last_price": 202.0,
-      "last_rsi": 46.5,
-      "pnl_pct": 7.46
+      "last_price": 195.4,
+      "last_rsi": 40.4,
+      "pnl_pct": 3.95
     },
     {
-      "symbol": "ASELS.IS",
-      "clean_symbol": "ASELS",
-      "entry_date": "2026-05-22",
-      "entry_date_disp": "22.05.2026",
-      "entry_price": 410.0,
-      "entry_rsi": 53.2,
-      "target_rsi": 76,
-      "entry_rule": "Trend Filtreli (Alım RSI < 60 | 8g Bekle)",
-      "last_price": 341.5,
-      "last_rsi": 47.6,
-      "pnl_pct": -16.71
+      "symbol": "EREGL.IS",
+      "clean_symbol": "EREGL",
+      "entry_date": "2026-05-20",
+      "entry_date_disp": "20.05.2026",
+      "entry_price": 38.12,
+      "entry_rsi": 63.3,
+      "target_rsi": 71,
+      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
+      "last_price": 31.2,
+      "last_rsi": 40.6,
+      "pnl_pct": -18.16
     },
     {
-      "symbol": "TRMET.IS",
-      "clean_symbol": "TRMET",
-      "entry_date": "2026-03-25",
-      "entry_date_disp": "25.03.2026",
-      "entry_price": 129.8,
-      "entry_rsi": 37.7,
-      "target_rsi": 76,
-      "entry_rule": "Trend Filtreli (Alım RSI < 60)",
-      "last_price": 113.5,
-      "last_rsi": 49.3,
-      "pnl_pct": -12.56
-    },
-    {
-      "symbol": "FROTO.IS",
-      "clean_symbol": "FROTO",
-      "entry_date": "2026-03-17",
-      "entry_date_disp": "17.03.2026",
-      "entry_price": 107.9,
+      "symbol": "ASTOR.IS",
+      "clean_symbol": "ASTOR",
+      "entry_date": "2026-06-11",
+      "entry_date_disp": "11.06.2026",
+      "entry_price": 291.65,
       "entry_rsi": 47.5,
       "target_rsi": 78,
-      "entry_rule": "V-Tipi (RSI ≤ 48 Soğuma + İlk Dönüş) | Alım RSI < 55",
-      "last_price": 71.7,
-      "last_rsi": 50.0,
-      "pnl_pct": -33.55
+      "entry_rule": "Trend Filtreli (Alım RSI < 52)",
+      "last_price": 152.1,
+      "last_rsi": 40.9,
+      "pnl_pct": -47.85
     },
     {
-      "symbol": "MGROS.IS",
-      "clean_symbol": "MGROS",
-      "entry_date": "2026-03-02",
-      "entry_date_disp": "02.03.2026",
-      "entry_price": 639.55,
-      "entry_rsi": 50.6,
-      "target_rsi": 78,
-      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
-      "last_price": 466.75,
-      "last_rsi": 50.6,
-      "pnl_pct": -27.02
+      "symbol": "KRDMD.IS",
+      "clean_symbol": "KRDMD",
+      "entry_date": "2026-06-08",
+      "entry_date_disp": "08.06.2026",
+      "entry_price": 39.0,
+      "entry_rsi": 48.9,
+      "target_rsi": 77,
+      "entry_rule": "Trend Filtreli (Alım RSI < 65 | 10g Bekle)",
+      "last_price": 37.6,
+      "last_rsi": 42.9,
+      "pnl_pct": -3.59
     },
     {
       "symbol": "ISCTR.IS",
@@ -223,9 +158,48 @@
       "entry_rsi": 39.6,
       "target_rsi": 77,
       "entry_rule": "W-Tipi (Önce RSI ≤ 45 ➔ Sonra Kriter) | Alım RSI < 52",
-      "last_price": 13.05,
-      "last_rsi": 50.6,
-      "pnl_pct": -7.75
+      "last_price": 12.64,
+      "last_rsi": 44.1,
+      "pnl_pct": -10.64
+    },
+    {
+      "symbol": "TUPRS.IS",
+      "clean_symbol": "TUPRS",
+      "entry_date": "2026-09-17",
+      "entry_date_disp": "17.09.2026",
+      "entry_price": 404.75,
+      "entry_rsi": 64.5,
+      "target_rsi": 78,
+      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
+      "last_price": 345.75,
+      "last_rsi": 44.5,
+      "pnl_pct": -14.58
+    },
+    {
+      "symbol": "MGROS.IS",
+      "clean_symbol": "MGROS",
+      "entry_date": "2026-03-02",
+      "entry_date_disp": "02.03.2026",
+      "entry_price": 639.55,
+      "entry_rsi": 50.6,
+      "target_rsi": 78,
+      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
+      "last_price": 455.0,
+      "last_rsi": 45.3,
+      "pnl_pct": -28.86
+    },
+    {
+      "symbol": "TRMET.IS",
+      "clean_symbol": "TRMET",
+      "entry_date": "2026-03-25",
+      "entry_date_disp": "25.03.2026",
+      "entry_price": 129.8,
+      "entry_rsi": 37.7,
+      "target_rsi": 76,
+      "entry_rule": "Trend Filtreli (Alım RSI < 60)",
+      "last_price": 109.9,
+      "last_rsi": 45.7,
+      "pnl_pct": -15.33
     },
     {
       "symbol": "EKGYO.IS",
@@ -236,87 +210,9 @@
       "entry_rsi": 31.0,
       "target_rsi": 78,
       "entry_rule": "Trend Filtreli (Alım RSI < 52 | 10g Bekle | 35g Pahalıdan Alma)",
-      "last_price": 18.35,
-      "last_rsi": 51.1,
-      "pnl_pct": -6.37
-    },
-    {
-      "symbol": "TOASO.IS",
-      "clean_symbol": "TOASO",
-      "entry_date": "2026-02-26",
-      "entry_date_disp": "26.02.2026",
-      "entry_price": 301.71,
-      "entry_rsi": 53.9,
-      "target_rsi": 77,
-      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
-      "last_price": 245.4,
-      "last_rsi": 52.7,
-      "pnl_pct": -18.66
-    },
-    {
-      "symbol": "TCELL.IS",
-      "clean_symbol": "TCELL",
-      "entry_date": "2026-03-23",
-      "entry_date_disp": "23.03.2026",
-      "entry_price": 108.4,
-      "entry_rsi": 42.6,
-      "target_rsi": 72,
-      "entry_rule": "V-Tipi (RSI ≤ 42 Soğuma + İlk Dönüş) | Alım RSI < 60",
-      "last_price": 96.3,
-      "last_rsi": 52.8,
-      "pnl_pct": -11.16
-    },
-    {
-      "symbol": "VAKBN.IS",
-      "clean_symbol": "VAKBN",
-      "entry_date": "2026-03-17",
-      "entry_date_disp": "17.03.2026",
-      "entry_price": 32.74,
-      "entry_rsi": 35.5,
-      "target_rsi": 77,
-      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
-      "last_price": 33.04,
-      "last_rsi": 53.4,
-      "pnl_pct": 0.92
-    },
-    {
-      "symbol": "AKBNK.IS",
-      "clean_symbol": "AKBNK",
-      "entry_date": "2026-07-14",
-      "entry_date_disp": "14.07.2026",
-      "entry_price": 69.1,
-      "entry_rsi": 38.7,
-      "target_rsi": 68,
-      "entry_rule": "V-Tipi (RSI ≤ 48 Soğuma + İlk Dönüş) | Alım RSI < 65",
-      "last_price": 69.05,
-      "last_rsi": 53.7,
-      "pnl_pct": -0.07
-    },
-    {
-      "symbol": "ENKAI.IS",
-      "clean_symbol": "ENKAI",
-      "entry_date": "2026-05-20",
-      "entry_date_disp": "20.05.2026",
-      "entry_price": 98.8,
-      "entry_rsi": 43.2,
-      "target_rsi": 70,
-      "entry_rule": "V-Tipi (RSI ≤ 55 Soğuma + İlk Dönüş) | Alım RSI < 65 | 10g Bekle",
-      "last_price": 81.9,
-      "last_rsi": 53.9,
-      "pnl_pct": -17.11
-    },
-    {
-      "symbol": "YKBNK.IS",
-      "clean_symbol": "YKBNK",
-      "entry_date": "2025-09-01",
-      "entry_date_disp": "01.09.2025",
-      "entry_price": 33.42,
-      "entry_rsi": 53.3,
-      "target_rsi": 78,
-      "entry_rule": "Trend Filtreli (Alım RSI < 65 | 8g Bekle)",
-      "last_price": 37.36,
-      "last_rsi": 54.7,
-      "pnl_pct": 11.79
+      "last_price": 17.87,
+      "last_rsi": 46.1,
+      "pnl_pct": -8.82
     },
     {
       "symbol": "TTKOM.IS",
@@ -327,9 +223,113 @@
       "entry_rsi": 37.2,
       "target_rsi": 78,
       "entry_rule": "W-Tipi (Önce RSI ≤ 58 ➔ Sonra Kriter) | Alım RSI < 55 | 10g Bekle | 35g Pahalıdan Alma",
-      "last_price": 51.1,
-      "last_rsi": 54.7,
-      "pnl_pct": -15.54
+      "last_price": 49.3,
+      "last_rsi": 47.1,
+      "pnl_pct": -18.51
+    },
+    {
+      "symbol": "AKBNK.IS",
+      "clean_symbol": "AKBNK",
+      "entry_date": "2026-07-14",
+      "entry_date_disp": "14.07.2026",
+      "entry_price": 69.1,
+      "entry_rsi": 38.7,
+      "target_rsi": 68,
+      "entry_rule": "V-Tipi (RSI ≤ 48 Soğuma + İlk Dönüş) | Alım RSI < 65",
+      "last_price": 67.1,
+      "last_rsi": 47.3,
+      "pnl_pct": -2.89
+    },
+    {
+      "symbol": "ENKAI.IS",
+      "clean_symbol": "ENKAI",
+      "entry_date": "2026-05-20",
+      "entry_date_disp": "20.05.2026",
+      "entry_price": 98.8,
+      "entry_rsi": 43.2,
+      "target_rsi": 70,
+      "entry_rule": "V-Tipi (RSI ≤ 55 Soğuma + İlk Dönüş) | Alım RSI < 65 | 10g Bekle",
+      "last_price": 80.0,
+      "last_rsi": 47.5,
+      "pnl_pct": -19.03
+    },
+    {
+      "symbol": "ASELS.IS",
+      "clean_symbol": "ASELS",
+      "entry_date": "2026-05-22",
+      "entry_date_disp": "22.05.2026",
+      "entry_price": 410.0,
+      "entry_rsi": 53.2,
+      "target_rsi": 76,
+      "entry_rule": "Trend Filtreli (Alım RSI < 60 | 8g Bekle)",
+      "last_price": 343.75,
+      "last_rsi": 48.7,
+      "pnl_pct": -16.16
+    },
+    {
+      "symbol": "TCELL.IS",
+      "clean_symbol": "TCELL",
+      "entry_date": "2026-03-23",
+      "entry_date_disp": "23.03.2026",
+      "entry_price": 108.4,
+      "entry_rsi": 42.6,
+      "target_rsi": 72,
+      "entry_rule": "V-Tipi (RSI ≤ 42 Soğuma + İlk Dönüş) | Alım RSI < 60",
+      "last_price": 94.7,
+      "last_rsi": 48.8,
+      "pnl_pct": -12.64
+    },
+    {
+      "symbol": "YKBNK.IS",
+      "clean_symbol": "YKBNK",
+      "entry_date": "2025-09-01",
+      "entry_date_disp": "01.09.2025",
+      "entry_price": 33.42,
+      "entry_rsi": 53.3,
+      "target_rsi": 78,
+      "entry_rule": "Trend Filtreli (Alım RSI < 65 | 8g Bekle)",
+      "last_price": 36.52,
+      "last_rsi": 49.4,
+      "pnl_pct": 9.28
+    },
+    {
+      "symbol": "TOASO.IS",
+      "clean_symbol": "TOASO",
+      "entry_date": "2026-02-26",
+      "entry_date_disp": "26.02.2026",
+      "entry_price": 301.71,
+      "entry_rsi": 53.9,
+      "target_rsi": 77,
+      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
+      "last_price": 241.7,
+      "last_rsi": 50.3,
+      "pnl_pct": -19.89
+    },
+    {
+      "symbol": "VAKBN.IS",
+      "clean_symbol": "VAKBN",
+      "entry_date": "2026-03-17",
+      "entry_date_disp": "17.03.2026",
+      "entry_price": 32.74,
+      "entry_rsi": 35.5,
+      "target_rsi": 77,
+      "entry_rule": "Güçlü Trend (Alım RSI < 65, Ek Bekleme Yok)",
+      "last_price": 32.78,
+      "last_rsi": 51.7,
+      "pnl_pct": 0.12
+    },
+    {
+      "symbol": "FROTO.IS",
+      "clean_symbol": "FROTO",
+      "entry_date": "2026-03-17",
+      "entry_date_disp": "17.03.2026",
+      "entry_price": 107.9,
+      "entry_rsi": 47.5,
+      "target_rsi": 78,
+      "entry_rule": "V-Tipi (RSI ≤ 48 Soğuma + İlk Dönüş) | Alım RSI < 55",
+      "last_price": 72.6,
+      "last_rsi": 52.2,
+      "pnl_pct": -32.72
     },
     {
       "symbol": "BIMAS.IS",
@@ -340,9 +340,9 @@
       "entry_rsi": 48.6,
       "target_rsi": 69,
       "entry_rule": "W-Tipi (Önce RSI ≤ 58 ➔ Sonra Kriter) | Alım RSI < 65",
-      "last_price": 393.25,
-      "last_rsi": 55.4,
-      "pnl_pct": -5.01
+      "last_price": 389.75,
+      "last_rsi": 53.1,
+      "pnl_pct": -5.86
     },
     {
       "symbol": "TAVHL.IS",
@@ -353,9 +353,9 @@
       "entry_rsi": 55.5,
       "target_rsi": 78,
       "entry_rule": "Trend Filtreli (Alım RSI < 60)",
-      "last_price": 302.75,
-      "last_rsi": 65.6,
-      "pnl_pct": 28.13
+      "last_price": 291.0,
+      "last_rsi": 54.7,
+      "pnl_pct": 23.16
     },
     {
       "symbol": "PGSUS.IS",
@@ -366,9 +366,9 @@
       "entry_rsi": 38.8,
       "target_rsi": 77,
       "entry_rule": "W-Tipi (Önce RSI ≤ 58 ➔ Sonra Kriter) | Alım RSI < 65",
-      "last_price": 158.8,
-      "last_rsi": 70.6,
-      "pnl_pct": -31.82
+      "last_price": 155.0,
+      "last_rsi": 64.6,
+      "pnl_pct": -33.45
     },
     {
       "symbol": "THYAO.IS",
@@ -379,9 +379,9 @@
       "entry_rsi": 52.2,
       "target_rsi": 73,
       "entry_rule": "V-Tipi (RSI ≤ 58 Soğuma + İlk Dönüş) | Alım RSI < 65",
-      "last_price": 322.25,
-      "last_rsi": 71.3,
-      "pnl_pct": -2.35
+      "last_price": 323.75,
+      "last_rsi": 71.9,
+      "pnl_pct": -1.89
     }
   ],
   "closed_history": [
@@ -419,7 +419,7 @@
     }
   ],
   "last_daily_actions": {
-    "date": "2026-11-17",
+    "date": "2026-11-18",
     "bought": [],
     "sold": [],
     "skipped": []
