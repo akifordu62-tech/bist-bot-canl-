@@ -101,6 +101,31 @@ def create_chart(
         col=1,
     )
 
+    if "EMA50" in plot_df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df.index,
+                y=plot_df["EMA50"],
+                mode="lines",
+                line=dict(color="#ffb74d", width=1.4),
+                name="EMA 50 (Çift Kalkan)",
+            ),
+            row=1,
+            col=1,
+        )
+    if "EMA200" in plot_df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df.index,
+                y=plot_df["EMA200"],
+                mode="lines",
+                line=dict(color="#29b6f6", width=1.6, dash="dot"),
+                name="EMA 200 (Süper Lider)",
+            ),
+            row=1,
+            col=1,
+        )
+
     # 2. Gerçek İşlem Çizgileri (AL -> SAT arası kesikli kâr/zarar çizgisi)
     buy_signals = plot_df[plot_df["Long_Signal"]]
     exit_signals = plot_df[plot_df["Exit_Signal"]]
@@ -154,17 +179,20 @@ def create_chart(
             col=1,
         )
 
-    # 4. SAT Sinyalleri (Kırmızı Ters Üçgen + Getiri %)
+    # 4. SAT / Çift EMA50 Stop Sinyalleri (Kırmızı Ters Üçgen + Getiri %)
     if not exit_signals.empty:
+        has_reason_col = "Exit_Reason" in plot_df.columns
         for idx_s, s_dt in enumerate(exit_signals.index):
             s_price = float(plot_df.loc[s_dt, "Close"])
+            rsn = str(plot_df.loc[s_dt, "Exit_Reason"]) if has_reason_col else ""
+            prefix = "STOP" if "EMA50" in rsn else "SAT"
             prior_buys = [b_dt for b_dt in buy_dates if b_dt < s_dt]
             if prior_buys:
                 bp = float(plot_df.loc[prior_buys[-1], "Close"])
                 rp = ((s_price - bp) / bp) * 100.0
-                exit_labels.append(f"SAT #{idx_s+1} (%{rp:+.1f})")
+                exit_labels.append(f"{prefix} #{idx_s+1} (%{rp:+.1f})")
             else:
-                exit_labels.append(f"SAT #{idx_s+1}")
+                exit_labels.append(f"{prefix} #{idx_s+1}")
 
         fig.add_trace(
             go.Scatter(
@@ -180,9 +208,9 @@ def create_chart(
                 text=exit_labels,
                 textposition="top center",
                 textfont=dict(color="#ff5252", size=11),
-                name=f"SAT (RSI {opt_rsi})",
+                name=f"SAT / STOP (RSI {opt_rsi} / EMA50)",
                 customdata=exit_signals["Close"],
-                hovertemplate=f"<b>SAT (RSI {opt_rsi} Kırılımı)</b><br>Tarih: %{{x|%d.%m.%Y}}<br>Kapanış: %{{customdata:.2f}} TL<extra></extra>",
+                hovertemplate="<b>Çıkış (RSI / Çift EMA50 Stop)</b><br>Tarih: %{x|%d.%m.%Y}<br>Kapanış: %{customdata:.2f} TL<extra></extra>",
             ),
             row=1,
             col=1,

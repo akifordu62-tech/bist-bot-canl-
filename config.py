@@ -1,7 +1,7 @@
 """
-Strateji, Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma + Özel Çıkış RSI) ve Portföy Konfigürasyonu (V8.0)
-- Her hisse kendi tahta karakterine göre V-Tipi (Eşzamanlı Soğuma), W-Tipi (Önce RSI Soğusun -> Sonra Kriter Ara) veya Trend Filtreli giriş kuralını ve Özel Çıkış RSI hedefini kullanır.
-- Kapanan işlemlerden (SAT) sonra yeni işlem verisiyle optimal_params.json otomatik güncellenir.
+Strateji, Süper Lider + Akıllı Çift Kalkan (XU100 & Hisse EMA50) ve Hibrit V/W Özel Mod Konfigürasyonu (V9.0)
+- Giriş: Orijinal V8.0 (V/W soğuma + Net Hacim dönüşü) + Süper Lider Filtresi (RS60 >= %15, 52H Zirve >= -%15, Close > EMA200) + Endeks Kalkanı (XU100 > EMA50)
+- Çıkış: Hisseye özel optimum Çıkış RSI (68-78) VEYA Akıllı Çift Kalkan (XU100 < EMA50 VE Hisse < EMA50 -> Nakit / PPF)
 """
 import os
 import json
@@ -9,7 +9,7 @@ import datetime
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
-STRATEGY_VERSION = "V8_HYBRID"
+STRATEGY_VERSION = "V9_SUPER_LEADER"
 OPTIMAL_PARAMS_FILE = os.path.join(os.path.dirname(__file__), "optimal_params.json")
 
 # Yedek (Fallback) 2020+ Hisse Bazlı En Kârlı Çıkış RSI Haritası
@@ -173,7 +173,7 @@ def get_optimal_rsi(symbol: Optional[str] = None, default: int = 72) -> int:
 
 @dataclass
 class StrategyConfig:
-    # V8.0 Hibrit Özel Mod: Hisseye Özel V/W Giriş-Soğuma + Çıkış RSI Strateji Parametreleri
+    # V9.0 Süper Lider + Akıllı Çift Kalkan (V8.0 Hibrit Motor Üzerine)
     nv_avg_length: int = 5                        # Net Hacim Ortalaması Periyodu (SMA 5)
     rsi_length: int = 14                          # Wilder RSI Periyodu
     rsi_max_buy: float = 65.0                     # Manuel mod seçilirse kullanılacak üst alım RSI sınırı
@@ -182,9 +182,17 @@ class StrategyConfig:
     rsi_overbought: int = 72                      # Manuel mod seçilirse kullanılacak sabit çıkış RSI seviyesi
     use_fast_2bar_neg_flow: bool = True           # 2 ve 3 bar negatif akış dönüşlerini yakalar
 
-    # Portföy / Açık Sinyal Kuralları (Sadece BIST 30 | 30 Hisse Sınırsız Takip)
+    # V9.0 Süper Lider & Akıllı Çift Kalkan Parametreleri
+    use_super_leader: bool = True                 # RS60 >= %15 + 52H Zirve >= -%15 + Close > EMA200 aktif
+    min_rs60_pct: float = 15.0                    # 60 iş günlük Relatif Güç alt sınırı (Hisse - XU100 >= %15)
+    max_dist_52h_pct: float = -15.0               # 52 haftalık zirveden izin verilen maksimum uzaklık (-%15)
+    use_xu100_regime_filter: bool = True          # XU100 > EMA50 değilken yeni AL kapalı (PPF kalkanı)
+    use_dual_ema50_shield: bool = True            # XU100 < EMA50 VE Hisse < EMA50 ise akıllı stop -> PPF
+    index_symbol: str = "XU100.IS"
+
+    # Portföy / Açık Sinyal Kuralları (Sadece BIST 30 | Sınırsız Takip — Önerilen: 3-4 Lider x %25-33 + PPF)
     max_open_positions: int = 30
-    position_size_pct: float = 10.0
+    position_size_pct: float = 25.0
 
     # Tarih Filtresi (2020'den günümüze)
     use_date_filter: bool = True
@@ -200,7 +208,7 @@ class StrategyConfig:
 PORTFOLIO_CONFIG = {
     "universe": "BIST30",
     "max_positions": 30,
-    "allocation_pct": 10.0,
+    "allocation_pct": 25.0,
 }
 
 # Telegram Bot Ayarları

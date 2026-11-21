@@ -1,5 +1,5 @@
 """
-BIST 30 Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma + Çıkış RSI & Otomatik Öğrenen 5 Hisse Portföy) Web Paneli (V8.0)
+BIST 30 Süper Lider + Akıllı Çift Kalkan (XU100 & Hisse EMA50) Web Paneli (V9.0)
 """
 import sys
 import importlib
@@ -15,7 +15,7 @@ except Exception:
 
 import config as _cfg_mod
 import strategy as _strat_mod
-if getattr(_cfg_mod, "STRATEGY_VERSION", "") != "V8_HYBRID" or not hasattr(_strat_mod, "recalibrate_and_save_stock"):
+if getattr(_cfg_mod, "STRATEGY_VERSION", "") != "V9_SUPER_LEADER" or not hasattr(_strat_mod, "get_xu100_df"):
     for _mod_name in [
         "config",
         "bist_symbols",
@@ -52,8 +52,8 @@ from telegram_notifier import (
 )
 
 st.set_page_config(
-    page_title="BIST 30 Hibrit Özel RSI & Portföy Paneli",
-    page_icon="📈",
+    page_title="BIST 30 Süper Lider & Çift Kalkan Paneli (V9.0)",
+    page_icon="⭐",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -219,12 +219,27 @@ with st.sidebar.expander("Endeks Hisselerini Yönet", expanded=False):
             st.success("Endeks listeleri güncellendi!")
             st.rerun()
 
-st.sidebar.subheader("🛠️ Strateji Parametreleri (V8.0 - Hibrit)")
+st.sidebar.subheader("🛠️ Strateji Parametreleri (V9.0 - Süper Lider)")
 with st.sidebar.expander("Girdi Ayarlarını Değiştir", expanded=False):
+    use_super_leader = st.checkbox(
+        "⭐ Süper Lider Filtresi (RS60 ≥ %15, Zirve ≥ -%15, EMA200 Üstü)",
+        value=True,
+        help="Sadece son 60 günde endeksi en az %15 yenen, 52H zirvesine yakın ve EMA200 üstündeki güçlü liderleri alır.",
+    )
+    use_xu_regime = st.checkbox(
+        "🛡️ Endeks Rejim Kalkanı (XU100 > EMA50)",
+        value=True,
+        help="BIST 100 endeksi EMA50 altındayken yeni hisse alımını kapatır (Nakit PPF'de korunur).",
+    )
+    use_dual_shield = st.checkbox(
+        "🛡️ Akıllı Çift Kalkan Stop (XU100 < EMA50 VE Hisse < EMA50)",
+        value=True,
+        help="Hem endeks hem de hisse EMA50 altına indiğinde pozisyonu koruma amaçlı kapatır.",
+    )
     use_opt_entry = st.checkbox(
         "Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma)",
         value=True,
-        help="Aktifken her hisse kendi karakterine göre V-Tipi (Eşzamanlı) veya W-Tipi (Önce RSI Soğusun -> Sonra Kriter Ara) soğuma kuralını uygular.",
+        help="Aktifken her hisse kendi karakterine göre V-Tipi veya W-Tipi soğuma kuralını uygular.",
     )
     use_opt_rsi = st.checkbox(
         "Hisseye Özel Çıkış RSI (2020+ En Kârlı)",
@@ -258,6 +273,9 @@ current_config = StrategyConfig(
     use_per_stock_optimal_rsi=use_opt_rsi,
     use_per_stock_entry_cooldown=use_opt_entry,
     rsi_overbought=rsi_ob,
+    use_super_leader=use_super_leader,
+    use_xu100_regime_filter=use_xu_regime,
+    use_dual_ema50_shield=use_dual_shield,
     use_date_filter=True,
     start_year=start_year,
     start_month=1,
@@ -268,9 +286,9 @@ current_config = StrategyConfig(
 # 1. HİSSE GRAFİĞİ & SİNYALLER GÖRÜNÜMÜ
 # ==========================================
 if app_mode == "📈 Hisse Grafiği & Sinyaller":
-    st.title("📈 BIST 30 Hibrit Özel Mod (V/W Soğuma & Çıkış RSI) Grafiği")
+    st.title("📈 BIST 30 Süper Lider + Akıllı Çift Kalkan Grafiği (V9.0)")
     st.markdown(
-        "**Hibrit Özel Mod (V8.0):** Her şirketin tahta karakterine göre **V-Tipi (Eşzamanlı)** veya **W-Tipi (Önce RSI Soğusun ➔ Sonra Kriter Ara)** dönüş kuralı ve **Özel Çıkış RSI** hedefiyle çalışan canlı analiz grafiği."
+        "**V9.0 Süper Lider + Akıllı Çift Kalkan:** Orijinal V8.0 (V/W soğuma + Net Hacim dönüşü) üzerine **Süper Lider Filtresi (`RS60 ≥ %15`, `52H Zirve ≥ -%15`, `EMA200 Üstü`)** ve **Çift EMA50 Kalkanı (`XU100 & Hisse EMA50`)** eklenmiş canlı analiz grafiği."
     )
 
     col1, col2, col3, col4 = st.columns([1.7, 1.1, 1.0, 1.1])
@@ -327,23 +345,27 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
 
         sparams = get_stock_params(selected_clean)
         rule_summary = format_stock_entry_rule(sparams)
-        cal_date = sparams.get("calibrated_at", "")
+        rs60_v = float(last_row.get("RS60_Pct", 0.0))
+        d52_v = float(last_row.get("Dist_52H_Pct", 0.0))
+        is_sl_now = bool(last_row.get("Super_Leader_OK", False))
+        xu_ok_now = bool(last_row.get("XU100_Above_EMA50", True))
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Son Kapanış", f"{last_price:.2f} TL", f"Tarih: {last_date}")
+        m1.metric("Son Kapanış", f"{last_price:.2f} TL", f"EMA50: {float(last_row.get('EMA50', 0.0)):.2f} TL")
         m2.metric("Güncel RSI (14)", f"{last_rsi:.1f}", f"Hedef Çıkış: RSI {opt_rsi}")
-        m3.metric("Hisseye Özel Çıkış Hedefi", f"RSI {opt_rsi}", f"Güncelleme: {cal_date or 'Aktif'}")
-        m4.metric("Tekil Hisse Durumu", "🟢 Pozisyonda (AL)" if in_pos else "⚪ Nakitte / İzlemede")
+        m3.metric("Süper Lider Durumu", "⭐ SÜPER LİDER" if is_sl_now else "⚪ Normal", f"RS60: %{rs60_v:+.1f} | 52H: %{d52_v:+.1f}")
+        m4.metric("V9.0 Pozisyon Durumu", "🟢 Açık İşlem (AL)" if in_pos else "⚪ Nakitte / PPF", f"XU100: {'🟢 EMA50 Üstü' if xu_ok_now else '🔴 EMA50 Altı'}")
 
-        st.caption(f"🛡️ **{selected_clean} Hibrit Giriş & Soğuma Kuralı (V8.0):** {rule_summary}")
+        st.caption(f"🛡️ **{selected_clean} V9.0 Kuralı:** {rule_summary} | Süper Lider (RS60 ≥ %15, 52H ≥ -%15, EMA200 Üstü) + Çift EMA50 Kalkanı")
 
-        if bool(last_row["Raw_Long_Condition"]):
+        if bool(last_row["Trade_Entry"]):
             st.success(
-                f"🚀 **BUGÜN AL SİNYALİ VERDİ!** ({last_date} kapanışı | Güncel RSI: {last_rsi:.1f} | Özel Çıkış Hedefi: RSI {opt_rsi})"
+                f"🚀 **BUGÜN SÜPER LİDER AL SİNYALİ VERDİ!** ({last_date} kapanışı | Güncel RSI: {last_rsi:.1f} | Özel Çıkış Hedefi: RSI {opt_rsi})"
             )
         elif bool(last_row["Exit_Signal"]):
+            rsn_now = str(last_row.get("Exit_Reason", "Hedef RSI"))
             st.error(
-                f"🔻 **BUGÜN SAT SİNYALİ VERDİ!** ({last_date} kapanışı itibariyle özel hedef RSI {opt_rsi} aşağı kırıldı)"
+                f"🔻 **BUGÜN ÇIKIŞ SİNYALİ VERDİ ({rsn_now})!** ({last_date} kapanışı)"
             )
 
         fig = create_chart(df_strat, symbol=selected_symbol, save_html=False)
@@ -352,48 +374,54 @@ if app_mode == "📈 Hisse Grafiği & Sinyaller":
         st.error(f"{selected_symbol} için veri alınamadı.")
 
 # ==========================================
-# 2. BIST 30 AÇIK SİNYALLER & TAKİP (SINIRSIZ)
+# 2. BIST 30 AÇIK SİNYALLER & TAKİP (V9.0 SÜPER LİDER)
 # ==========================================
 elif app_mode == "📌 BIST 30 Açık Sinyaller & Takip":
-    st.title("📌 BIST 30 Aktif Açık Sinyaller & Günlük Takip (V8.0)")
+    st.title("📌 BIST 30 Süper Lider + Akıllı Çift Kalkan Takibi (V9.0)")
     st.markdown(
-        "**Kural:** 5 hisse sınırı olmadan **tüm BIST 30 şirketleri (30 hisse)** takip edilir. "
-        "Her gün yeni **AL / SAT** sinyali verenler ve açıkta devam eden tüm sinyaller (**Sinyal Tarihi** ve **Sinyalden % Eksi/Artı Farkı** ile) listelenir."
+        "**V9.0 Kuralları:** Sadece **Süper Lider (`RS60 ≥ %15`, `52H Zirve ≥ -%15`, `EMA200 Üstü`)** şartını sağlayan BIST 30 hisselerinde **`XU100 > EMA50`** iken alım yapılır. "
+        "Kâr al çıkışı **Özel Optimum RSI** ile; koruma çıkışı ise **Akıllı Çift Kalkan (`XU100 < EMA50` VE `Hisse < EMA50`)** ile yapılır ve nakit PPF'ye geçer."
     )
 
     state = load_portfolio_state()
     open_positions = state.get("open_positions", [])
+    xu_info = state.get("xu_info", {})
+    xu_c = float(xu_info.get("close", 0.0) or 0.0)
+    xu_e50 = float(xu_info.get("ema50", 0.0) or 0.0)
+    xu_abv = bool(xu_info.get("above_ema50", True))
     open_cnt = len(open_positions)
-    cheap_cnt = sum(1 for p in open_positions if float(p.get("pnl_pct", 0.0)) <= 0.0)
-    profit_cnt = sum(1 for p in open_positions if float(p.get("pnl_pct", 0.0)) > 0.0)
 
     p1, p2, p3, p4 = st.columns(4)
-    p1.metric("Açık AL Sinyali", f"{open_cnt} / 30 Hisse", "Sınırsız BIST 30 Takibi")
-    p2.metric("Sinyal Fiyatından Ucuz", f"{cheap_cnt} Hisse", "İndirimli / Alım Bölgesi")
-    p3.metric("Kârda Devam Eden", f"{profit_cnt} Hisse", "Hedef RSI Bekleniyor")
-    p4.metric("Sinyali Olmayan", f"{max(0, 30 - open_cnt)} Hisse", "Soğuma / İzlemede")
+    p1.metric(
+        "XU100 Rejimi",
+        "🟢 POZİTİF" if xu_abv else "🔴 PPF KALKANI",
+        f"{xu_c:,.0f} / EMA50 {xu_e50:,.0f}" if xu_c > 0 else "Tarama bekleniyor",
+    )
+    p2.metric("Açık Süper Lider", f"{open_cnt} / 30 Hisse", "İlk AL Tarihine Kilitli")
+    p3.metric("Önerilen Dağılım", "3–4 Lider × %25–33", "Boş Nakit PPF'de")
+    p4.metric("Son Güncelleme", state.get("last_processed_date") or "-", "1 Günlük Kapanış")
 
     act_col1, act_col2 = st.columns([1, 1])
     with act_col1:
         refresh_port_btn = st.button(
-            "🔄 BIST 30 Taraması Yap & Açık Sinyal Tablosunu Güncelle",
+            "🔄 BIST 30 Süper Lider Taraması Yap & Güncelle",
             type="primary",
             use_container_width=True,
         )
     with act_col2:
         send_port_tg_btn = st.button(
-            "📲 Güncel BIST 30 Tablosunu Telegram'a Gönder",
+            "📲 Güncel V9.0 Raporunu Telegram'a Gönder",
             use_container_width=True,
         )
 
     if refresh_port_btn:
-        with st.spinner("30 adet BIST 30 şirketi taranıyor ve açık sinyaller güncelleniyor..."):
+        with st.spinner("XU100 ve 30 adet BIST 30 şirketi V9.0 Süper Lider kurallarıyla taranıyor..."):
             scan_symbols(BIST_30_SYMBOLS, send_telegram=False, save_charts=False, update_portfolio=True)
-            st.success("BIST 30 açık sinyal tablosu güncel verilerle yenilendi!")
+            st.success("BIST 30 Süper Lider & Çift Kalkan tablosu güncel verilerle yenilendi!")
             st.rerun()
 
     if send_port_tg_btn:
-        with st.spinner("30 adet BIST 30 şirketi taranıyor ve güncel tablo Telegram'a gönderiliyor..."):
+        with st.spinner("V9.0 Süper Lider raporu oluşturuluyor ve Telegram'a gönderiliyor..."):
             res_tg = scan_symbols(
                 BIST_30_SYMBOLS,
                 send_telegram=True,
@@ -402,11 +430,11 @@ elif app_mode == "📌 BIST 30 Açık Sinyaller & Takip":
                 update_portfolio=True,
             )
             if res_tg.get("all_stocks_list"):
-                st.success("BIST 30 güncel sinyal tablosu Telegram'a başarıyla gönderildi!")
+                st.success("V9.0 Süper Lider raporu Telegram'a başarıyla gönderildi!")
             else:
                 st.error("Telegram gönderimi başarısız oldu. Ayarlar sekmesini kontrol edin.")
 
-    st.markdown("### 📌 Takipteki Açık BIST 30 Sinyalleri (1G RSI En Ucuzdan Sıralı)")
+    st.markdown("### 💼 Takipteki Açık Süper Lider İşlemleri")
     if open_positions:
         rows = []
         for idx, pos in enumerate(sorted(open_positions, key=lambda x: float(x.get("last_rsi", 50.0))), 1):
@@ -414,53 +442,52 @@ elif app_mode == "📌 BIST 30 Açık Sinyaller & Takip":
             lp = float(pos.get("last_price", ep))
             pnl = ((lp - ep) / ep * 100.0) if ep > 0 else 0.0
             csym = pos["clean_symbol"]
-            erule = pos.get("entry_rule") or format_stock_entry_rule(get_stock_params(csym))
             rows.append(
                 {
                     "Sıra": idx,
                     "Hisse": csym,
-                    "Son AL Sinyal Tarihi": pos.get("entry_date_disp") or pos["entry_date"],
-                    "Sinyal Fiyatı": f"{ep:.2f} TL",
+                    "İlk AL Tarihi": pos.get("entry_date_disp") or pos["entry_date"],
+                    "İlk AL Fiyatı": f"{ep:.2f} TL",
                     "Güncel Fiyat": f"{lp:.2f} TL",
-                    "Sinyalden Fark (%)": f"%{pnl:+.2f}",
+                    "EMA50 Kalkanı": f"{float(pos.get('ema50', 0.0)):.2f} TL",
+                    "İlk Sinyalden Fark": f"%{pnl:+.2f}",
                     "Güncel 1G RSI": f"{float(pos.get('last_rsi', pos.get('entry_rsi', 50.0))):.1f}",
                     "Hedef Çıkış RSI": f"RSI {int(pos['target_rsi'])}",
-                    "Hibrit Filtre (V/W)": erule,
                 }
             )
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
         st.info(
-            "Tabloyu görmek için yukarıdaki **'🔄 BIST 30 Taraması Yap & Açık Sinyal Tablosunu Güncelle'** butonuna tıklayın."
+            "Şu an açık Süper Lider işlemi bulunmuyor (`0/30` — **`%100` Nakit / PPF Kalkanında**). "
+            "Endeks `EMA50` üstüne çıkıp yeni bir Süper Lider `AL` verdiğinde burada ve Telegram'da bildirilecektir."
         )
 
     closed_hist = state.get("closed_history", [])
     if closed_hist:
         st.markdown("---")
-        st.subheader("📜 Hedef RSI'a Ulaşıp Kapanan Sinyaller")
+        st.subheader("📜 Kapanan Süper Lider İşlemleri (Hedef RSI / Çift EMA50 Stop)")
         st.dataframe(pd.DataFrame(closed_hist[::-1]), use_container_width=True, hide_index=True)
 
 # ==========================================
-# 3. BIST 30 GÜNLÜK TARAMA (SCANNER)
+# 3. BIST 30 GÜNLÜK TARAMA (SCANNER V9.0)
 # ==========================================
 elif app_mode == "🔍 BIST 30 Günlük Tarama":
-    st.title("🔍 BIST 30 Günlük Sinyal & Açık İşlem Tablosu (V8.0)")
+    st.title("🔍 BIST 30 Süper Lider & Çift Kalkan Taraması (V9.0)")
     st.markdown(
-        "**30 adet BIST 30 şirketinin tamamını** orijinal V8.0 (**1 Günlük**) kurallarıyla tarar; "
-        "o gün yeni sinyal olup olmadığını ve tüm hisselerin **Sinyal Tarihi + Sinyalden % Eksi/Artı** durumunu tablo olarak üretir."
+        "**XU100** rejimini ve **30 adet BIST 30 şirketinin tamamını** V9.0 Süper Lider + Akıllı Çift Kalkan kurallarıyla tarar."
     )
 
     sc1, sc2 = st.columns([1.5, 1])
     with sc1:
         send_tg_check = st.checkbox(
-            "Tarama tamamlandığında 30 hisselik tabloyu Telegram'a da gönder",
+            "Tarama tamamlandığında V9.0 Süper Lider raporunu Telegram'a da gönder",
             value=False,
         )
     with sc2:
         start_scan = st.button("🚀 BIST 30 Taramasını Başlat", type="primary", use_container_width=True)
 
     if start_scan:
-        with st.spinner("30 adet BIST 30 şirketi Hibrit Özel Mod kurallarıyla taranıyor..."):
+        with st.spinner("XU100 ve 30 adet BIST 30 şirketi V9.0 Süper Lider kurallarıyla taranıyor..."):
             res_scan = scan_symbols(
                 BIST_30_SYMBOLS,
                 send_telegram=send_tg_check,
@@ -469,10 +496,12 @@ elif app_mode == "🔍 BIST 30 Günlük Tarama":
                 update_portfolio=True,
             )
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("🟢 Bugün Yeni AL Veren", len(res_scan["buy"]))
-        c2.metric("🔴 Bugün SAT Veren", len(res_scan["sell"]))
-        c3.metric("📌 Toplam Açık Sinyal", f"{len(res_scan['open_positions'])} / 30 Hisse")
+        xu_s = res_scan.get("xu_info", {})
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("🛡️ XU100 Rejimi", "🟢 POZİTİF" if xu_s.get("above_ema50", True) else "🔴 PPF KALKANI")
+        c2.metric("🟢 Bugün Yeni AL", len(res_scan["buy"]))
+        c3.metric("🔴 Bugün SAT / STOP", len(res_scan["sell"]))
+        c4.metric("💼 Açık Süper Lider", f"{len(res_scan['open_positions'])} / 30")
 
         preview_msg = format_bist30_daily_report(
             date_str=res_scan.get("display_date", ""),
@@ -482,11 +511,13 @@ elif app_mode == "🔍 BIST 30 Günlük Tarama":
             skipped_list=[],
             max_positions=30,
             all_stocks_list=res_scan.get("all_stocks_list", []),
+            xu_info=xu_s,
+            last_closed_info=res_scan.get("last_closed_info"),
         )
-        with st.expander("📩 Telegram Mesaj Önizlemesi", expanded=True):
+        with st.expander("📩 Telegram Mesaj Önizlemesi (V9.0)", expanded=True):
             st.markdown(preview_msg, unsafe_allow_html=True)
 
-        st.subheader("📋 Tüm BIST 30 Şirketleri Güncel Durum & Sinyal Tablosu (1G RSI Sıralı)")
+        st.subheader("📋 Tüm BIST 30 Şirketleri Süper Lider & Çift Kalkan Tablosu (RS60 Sıralı)")
         if res_scan.get("all_bist30"):
             st.dataframe(pd.DataFrame(res_scan["all_bist30"]), use_container_width=True, hide_index=True)
 
@@ -702,26 +733,27 @@ elif app_mode == "🧪 Backtest & Performans":
 # 5. AYARLAR & TELEGRAM
 # ==========================================
 elif app_mode == "⚙️ Ayarlar & Telegram":
-    st.title("⚙️ Telegram & BIST 30 Hibrit Özel Mod Ayarları (V8.0)")
+    st.title("⚙️ Telegram & BIST 30 Süper Lider Ayarları (V9.0)")
     st.markdown(
-        "**Aktif Kurallar:**\n"
-        "- **Evren:** Tüm **BIST 30** Şirketleri (30 Hisse — 5 Hisse Sınırı Yok)\n"
-        "- **Hibrit Giriş & Soğuma (V/W):** Her hisse tahta karakterine göre **V-Tipi (Eşzamanlı)** veya **W-Tipi (Önce RSI Soğusun ➔ Sonra Kriter Ara)** kuralını uygular\n"
-        "- **Çıkış Kuralı:** 2020'den günümüze hisse bazlı en kârlı **Özel Optimum RSI**\n"
-        "- **Günlük Bildirim:** O gün yeni AL / SAT sinyali verenler + 30 hissenin tamamı için sinyal tarihi ve sinyalden % eksi/artı tablosu"
+        "**Aktif V9.0 Kuralları (Süper Lider + Akıllı Çift Kalkan):**\n"
+        "- **Evren:** Sadece **BIST 30** Şirketleri (30 Hisse)\n"
+        "- **Süper Lider Filtresi:** `Close > EMA200`, `RS60 ≥ %15`, `52H Zirve ≥ -%15`\n"
+        "- **Endeks Rejim Kalkanı:** `XU100 > EMA50` değilken yeni AL kapalı (Nakit PPF'de korunur)\n"
+        "- **Akıllı Çift Kalkan Stop:** Hem `XU100 < EMA50` hem de `Hisse < EMA50` olduğunda koruma stopu ➔ PPF\n"
+        "- **Kâr Al Çıkışı:** Hisseye özel optimum **Çıkış RSI (`68–78`)**"
     )
 
     tg_token = st.text_input("Telegram Bot Token:", value=TELEGRAM_CONFIG.get("token", ""), type="password")
     tg_chat = st.text_input("Telegram Chat ID:", value=TELEGRAM_CONFIG.get("chat_id", ""))
     st.checkbox("Telegram Bildirimleri Aktif", value=TELEGRAM_CONFIG.get("enabled", True), disabled=True)
 
-    if st.button("🧪 Yeni V8.0 Hibrit Telegram Formatını Test Et"):
+    if st.button("🧪 Yeni V9.0 Süper Lider Telegram Formatını Test Et"):
         if not tg_token or not tg_chat or "BURAYA" in tg_token:
             st.error("Lütfen geçerli bir Bot Token ve Chat ID giriniz.")
         else:
             with st.spinner("Test mesajı gönderiliyor..."):
                 ok = test_telegram_connection(token=tg_token, chat_id=tg_chat)
                 if ok:
-                    st.success("Yeni V8.0 Hibrit Mod test mesajı Telegram'ınıza iletildi! 🎉")
+                    st.success("Yeni V9.0 Süper Lider test mesajı Telegram'ınıza iletildi! 🎉")
                 else:
                     st.error("Mesaj gönderilemedi. Token veya Chat ID bilgilerini kontrol edin.")

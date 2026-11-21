@@ -1,9 +1,11 @@
 """
-Net Hacim Akışı & Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Soğuma + Çıkış RSI) Strateji Motoru (V8.0)
-- Her hissenin kendi tahta karakterine göre V-Tipi (Eşzamanlı Soğuma) veya W-Tipi (Önce RSI Soğusun -> Sonra Kriter Ara) dönüş kuralını ve Özel Çıkış RSI hedefini uygular.
-- İşlem kapandığında (SAT) yeni işlem verisini dahil ederek hissenin V/W tipini, soğuma ve çıkış RSI seviyelerini otomatik günceller.
+Net Hacim Akışı & Süper Lider + Akıllı Çift Kalkan (XU100 & Hisse EMA50) Strateji Motoru (V9.0)
+- Temel Motor (V8.0): Her hissenin kendi tahta karakterine göre V-Tipi / W-Tipi soğuma ve Özel Çıkış RSI hedefini uygular.
+- Süper Lider Filtresi: Close > EMA200, RS60 >= %15 (60g hisse getirisi - XU100), 52H Zirve >= -%15 ve XU100 > EMA50 onayı.
+- Akıllı Çift Kalkan: Hem XU100 < EMA50 hem de Hisse < EMA50 olduğunda pozisyonu koruma amaçlı kapatır (Nakit / PPF).
 """
 import datetime
+import time
 from typing import Dict, Any, Optional
 import numpy as np
 import pandas as pd
@@ -14,6 +16,40 @@ from config import (
     get_stock_params,
     format_stock_entry_rule,
 )
+
+_XU100_CACHE: Dict[str, Any] = {"df": None, "fetched_at": 0.0}
+
+
+def get_xu100_df(force_refresh: bool = False, start: str = "2019-10-01") -> pd.DataFrame:
+    """
+    BIST 100 (XU100.IS) endeks verisini çeker ve 15 dakika bellek içi önbellekte tutar.
+    """
+    now = time.time()
+    if (
+        not force_refresh
+        and _XU100_CACHE["df"] is not None
+        and (now - float(_XU100_CACHE["fetched_at"])) < 900.0
+    ):
+        return _XU100_CACHE["df"]
+
+    try:
+        import yfinance as yf
+
+        df_xu = yf.download("XU100.IS", start=start, interval="1d", progress=False, auto_adjust=True)
+        if df_xu is None or df_xu.empty:
+            return pd.DataFrame()
+        if isinstance(df_xu.columns, pd.MultiIndex):
+            df_xu.columns = df_xu.columns.get_level_values(0)
+        df_xu = df_xu[["Open", "High", "Low", "Close", "Volume"]].dropna()
+        df_xu["EMA50"] = df_xu["Close"].ewm(span=50, adjust=False).mean()
+        df_xu["EMA200"] = df_xu["Close"].ewm(span=200, adjust=False).mean()
+        df_xu["RET60"] = df_xu["Close"].pct_change(60)
+        df_xu["RET120"] = df_xu["Close"].pct_change(120)
+        _XU100_CACHE["df"] = df_xu
+        _XU100_CACHE["fetched_at"] = now
+        return df_xu
+    except Exception:
+        return _XU100_CACHE["df"] if _XU100_CACHE["df"] is not None else pd.DataFrame()
 
 
 def calculate_net_volume(df: pd.DataFrame) -> pd.Series:
@@ -341,9 +377,13 @@ def run_strategy(
     df: pd.DataFrame,
     config: StrategyConfig = None,
     symbol: str = None,
+    xu_df: pd.DataFrame = None,
 ) -> pd.DataFrame:
     """
-    V8.0 Hibrit Özel Mod (Hisseye Göre V-Tipi / W-Tipi Giriş-Soğuma + Çıkış RSI) stratejisini çalıştırır.
+    V9.0 Süper Lider + Akıllı Çift Kalkan (XU100 & Hisse EMA50) stratejisini çalıştırır:
+    - Temel Motor (V8.0): Hisseye özel V-Tipi / W-Tipi soğuma + Net Hacim dönüşü + Özel Çıkış RSI.
+    - Süper Lider Filtresi: Close > EMA200, RS60 >= %15, 52H Zirve >= -%15 ve XU100 > EMA50.
+    - Akıllı Çift Kalkan: Hem XU100 < EMA50 hem de Hisse < EMA50 olduğunda pozisyonu koruma amaçlı kapatır.
     """
     if config is None:
         config = StrategyConfig()
@@ -354,10 +394,70 @@ def run_strategy(
         if col not in df.columns and col.lower() in df.columns:
             df[col] = df[col.lower()]
 
-    # 1. Göstergeler
+    # 1. Göstergeler (Temel + Süper Lider + Akıllı Çift Kalkan)
     df["Net_Volume"] = calculate_net_volume(df)
     df["NV_Avg"] = df["Net_Volume"].rolling(window=config.nv_avg_length).mean()
     df["RSI"] = calculate_rsi(df["Close"], period=config.rsi_length)
+    df["EMA50"] = df["Close"].ewm(span=50, adjust=False).mean()
+    df["EMA200"] = df["Close"].ewm(span=200, adjust=False).mean()
+    df["High_250"] = df["High"].rolling(window=250, min_periods=20).max()
+    df["Dist_52H_Pct"] = ((df["Close"] / df["High_250"]) - 1.0) * 100.0
+    df["Ret_60"] = df["Close"].pct_change(60)
+    df["Ret_120"] = df["Close"].pct_change(120)
+
+    # BIST 100 (XU100) Endeks Hizalaması
+    use_sl = bool(getattr(config, "use_super_leader", True))
+    use_xu = bool(getattr(config, "use_xu100_regime_filter", True))
+    use_dual_shield = bool(getattr(config, "use_dual_ema50_shield", True))
+    min_rs60 = float(getattr(config, "min_rs60_pct", 15.0))
+    max_dist_52h = float(getattr(config, "max_dist_52h_pct", -15.0))
+
+    if xu_df is None and (use_sl or use_xu or use_dual_shield):
+        xu_df = get_xu100_df()
+
+    if xu_df is not None and not xu_df.empty:
+        xu_local = xu_df.copy()
+        if "EMA50" not in xu_local.columns:
+            xu_local["EMA50"] = xu_local["Close"].ewm(span=50, adjust=False).mean()
+        if "RET60" not in xu_local.columns:
+            xu_local["RET60"] = xu_local["Close"].pct_change(60)
+        if "RET120" not in xu_local.columns:
+            xu_local["RET120"] = xu_local["Close"].pct_change(120)
+
+        # Zaman dilimi (tz) uyumluluğu
+        xu_idx = xu_local.index
+        if df.index.tz is not None and xu_idx.tz is None:
+            xu_local.index = xu_idx.tz_localize(df.index.tz)
+        elif df.index.tz is None and xu_idx.tz is not None:
+            xu_local.index = xu_idx.tz_localize(None)
+
+        xu_close_s = xu_local["Close"].reindex(df.index).ffill()
+        xu_ema50_s = xu_local["EMA50"].reindex(df.index).ffill()
+        xu_r60_s = xu_local["RET60"].reindex(df.index).ffill()
+        xu_r120_s = xu_local["RET120"].reindex(df.index).ffill()
+
+        df["XU100_Close"] = xu_close_s
+        df["XU100_EMA50"] = xu_ema50_s
+        df["XU100_Above_EMA50"] = (xu_close_s > xu_ema50_s).fillna(True)
+        df["RS60_Pct"] = ((df["Ret_60"] - xu_r60_s) * 100.0).fillna(-999.0)
+        df["RS120_Pct"] = ((df["Ret_120"] - xu_r120_s) * 100.0).fillna(-999.0)
+        df["RS_Score"] = 0.5 * df["RS60_Pct"] + 0.5 * df["RS120_Pct"]
+    else:
+        df["XU100_Close"] = np.nan
+        df["XU100_EMA50"] = np.nan
+        df["XU100_Above_EMA50"] = True
+        df["RS60_Pct"] = (df["Ret_60"] * 100.0).fillna(-999.0)
+        df["RS120_Pct"] = (df["Ret_120"] * 100.0).fillna(-999.0)
+        df["RS_Score"] = 0.5 * df["RS60_Pct"] + 0.5 * df["RS120_Pct"]
+
+    df["Above_EMA50"] = (df["Close"] > df["EMA50"]).fillna(False)
+    df["Above_EMA200"] = (df["Close"] > df["EMA200"]).fillna(False)
+    df["Super_Leader_OK"] = (
+        df["Above_EMA200"]
+        & (df["RS60_Pct"] >= min_rs60)
+        & (df["Dist_52H_Pct"] >= max_dist_52h)
+    ).fillna(False)
+    df["Dual_EMA50_Stop"] = ((~df["XU100_Above_EMA50"]) & (~df["Above_EMA50"])).fillna(False)
 
     # 2. Tarih Filtresi
     if config.use_date_filter:
@@ -425,26 +525,24 @@ def run_strategy(
     base_trig_arr = base_trigger.fillna(False).to_numpy(dtype=bool)
     close_arr = df["Close"].to_numpy(dtype=float)
     rsi_arr = df["RSI"].to_numpy(dtype=float)
+    sl_ok_arr = df["Super_Leader_OK"].to_numpy(dtype=bool)
+    xu_ok_arr = df["XU100_Above_EMA50"].to_numpy(dtype=bool)
+    dual_stop_arr = df["Dual_EMA50_Stop"].to_numpy(dtype=bool)
 
     rsi_exit = (df["RSI"] < exit_rsi_level) & (df["RSI"].shift(1) >= exit_rsi_level)
     rsi_exit_arr = rsi_exit.fillna(False).to_numpy(dtype=bool)
     df["Raw_Exit_Condition"] = rsi_exit & in_date_range
 
-    # 5. Tekil Hisse Simülasyonu & 5 Hisselik Portföy Aday Sinyal Motoru (V-Tipi & W-Tipi Hibrit)
+    # 5. Tekil Hisse V9.0 Süper Lider + Çift Kalkan Durum Makinesi
     n = len(df)
     positions = np.zeros(n, dtype=int)
     long_entries = np.zeros(n, dtype=bool)
     exit_signals = np.zeros(n, dtype=bool)
-    portfolio_long_cond = np.zeros(n, dtype=bool)
+    exit_reasons = np.full(n, "", dtype=object)
+    v8_long_cond = np.zeros(n, dtype=bool)
+    super_long_cond = np.zeros(n, dtype=bool)
 
-    # Tekil hisse durum değişkenleri
     current_position = 0
-    last_exit_idx = -9999
-    last_exit_price = 0.0
-    rsi_reset_ok = True
-    cool_idx = 0
-
-    # 5 Hisselik Sepet için Tepe Sonrası V/W Soğuma Takibi
     peak_exit_idx = -9999
     peak_exit_price = 0.0
     peak_reset_ok = True
@@ -455,19 +553,16 @@ def run_strategy(
             positions[i] = current_position
             continue
 
-        # Soğuma durumu güncellemeleri
+        # Soğuma durumu güncellemeleri (Sadece tepe RSI SAT sonrası soğuma takibi)
         if reset_rsi is not None:
             if not strict_after_reset:
                 if rsi_arr[i] <= reset_rsi or rsi_arr[i - 1] <= reset_rsi:
-                    rsi_reset_ok = True
                     peak_reset_ok = True
             else:
-                if current_position == 0 and cool_idx < 0 and rsi_arr[i] <= reset_rsi:
-                    cool_idx = i
                 if peak_cool_idx < 0 and rsi_arr[i] <= reset_rsi:
                     peak_cool_idx = i
 
-        # A) 5 Hisselik Portföy Aday Sinyali (Tepe Korumalı Hibrit Raw_Long_Condition)
+        # A) Baz V8.0 Aday Sinyali (Tepe Korumalı V/W Soğuma)
         if bool(rsi_exit_arr[i]):
             peak_exit_idx = i
             peak_exit_price = float(close_arr[i])
@@ -498,54 +593,39 @@ def run_strategy(
                         p_neg_3 = bool(neg3_prev_arr[i]) and ((i - 4) > peak_cool_idx)
                         if not (p_neg_d or p_neg_3):
                             p_cond = False
-            portfolio_long_cond[i] = p_cond
+            v8_long_cond[i] = p_cond
 
-        # B) Tekil Hisse Gerçek AL / SAT Durum Makinesi
+            sl_pass = p_cond
+            if sl_pass and use_sl and (not bool(sl_ok_arr[i])):
+                sl_pass = False
+            if sl_pass and use_xu and (not bool(xu_ok_arr[i])):
+                sl_pass = False
+            super_long_cond[i] = sl_pass
+
+        # B) Gerçek AL / SAT / Çift EMA50 Stop Durum Makinesi
         if current_position == 0:
-            cond = bool(base_trig_arr[i]) and (rsi_arr[i] < max_buy_rsi)
-            if cond and cooldown_bars > 0 and (i - last_exit_idx) <= cooldown_bars:
-                cond = False
-            if (
-                cond
-                and no_higher_bars > 0
-                and (i - last_exit_idx) <= no_higher_bars
-                and last_exit_price > 0
-                and close_arr[i] > last_exit_price
-            ):
-                cond = False
-            if cond and (reset_rsi is not None):
-                if not strict_after_reset:
-                    if not rsi_reset_ok:
-                        cond = False
-                else:
-                    if cool_idx < 0:
-                        cond = False
-                    elif last_exit_idx > 0:
-                        s_neg_d = bool(neg_dir_arr[i]) and ((i - w_dir) > cool_idx)
-                        s_neg_3 = bool(neg3_prev_arr[i]) and ((i - 4) > cool_idx)
-                        if not (s_neg_d or s_neg_3):
-                            cond = False
-
-            if cond:
+            if super_long_cond[i]:
                 current_position = 1
                 long_entries[i] = True
         else:
             if bool(rsi_exit_arr[i]):
                 current_position = 0
                 exit_signals[i] = True
-                last_exit_idx = i
-                last_exit_price = float(close_arr[i])
-                if reset_rsi is not None:
-                    rsi_reset_ok = False
-                    cool_idx = -1
+                exit_reasons[i] = "Hedef RSI"
+            elif use_dual_shield and bool(dual_stop_arr[i]):
+                current_position = 0
+                exit_signals[i] = True
+                exit_reasons[i] = "Çift EMA50 Stop"
 
         positions[i] = current_position
 
-    df["Raw_Long_Condition"] = portfolio_long_cond
+    df["Raw_V8_Long_Condition"] = v8_long_cond
+    df["Raw_Long_Condition"] = super_long_cond
     df["Position"] = positions
     df["Trade_Entry"] = long_entries
     df["Long_Signal"] = long_entries
     df["Exit_Signal"] = exit_signals
+    df["Exit_Reason"] = exit_reasons
     df["RSI_Warning"] = False
 
     return df
