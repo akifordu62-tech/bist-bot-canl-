@@ -2,8 +2,8 @@
   "universe": "BIST30",
   "max_positions": 30,
   "allocation_pct": 25.0,
-  "updated_at": "2026-11-25 23:45",
-  "last_processed_date": "2026-11-24",
+  "updated_at": "2026-11-26 23:58",
+  "last_processed_date": "2026-11-25",
   "last_calibrated_month": "2026-11",
   "open_positions": [],
   "closed_history": [
@@ -25,17 +25,17 @@
     }
   ],
   "last_daily_actions": {
-    "date": "2026-11-24",
+    "date": "2026-11-25",
     "bought": [],
     "sold": [],
     "skipped": []
   },
   "xu_info": {
-    "close": 10965.9,
-    "ema50": 12002.87,
-    "ema200": 12785.43,
+    "close": 10655.7,
+    "ema50": 11950.04,
+    "ema200": 12764.24,
     "above_ema50": false,
-    "date_iso": "2026-11-24"
+    "date_iso": "2026-11-25"
   },
   "last_closed_info": {
     "clean_symbol": "EREGL",
