@@ -17,12 +17,77 @@ from config import (
     format_stock_entry_rule,
 )
 
-_XU100_CACHE: Dict[str, Any] = {"df": None, "fetched_at": 0.0}
+_XU100_CACHE: Dict[str, Any] = {"df": None, "fetched_at": 0.0, "source": ""}
+_IST_TZ = datetime.timezone(datetime.timedelta(hours=3))
+
+
+def expected_latest_bist_date() -> datetime.date:
+    """
+    İstanbul saatine (UTC+3) göre Borsa İstanbul'un kapanışı kesinleşmiş en son işlem gününü döndürür.
+    Hafta içi 18:10 TSİ sonrasında bugünün, öncesinde bir önceki iş gününün tarihi beklenir.
+    """
+    now_ist = datetime.datetime.now(_IST_TZ)
+    d = now_ist.date()
+    if d.weekday() == 5:  # Cumartesi -> Cuma
+        return d - datetime.timedelta(days=1)
+    if d.weekday() == 6:  # Pazar -> Cuma
+        return d - datetime.timedelta(days=2)
+    # Hafta içi seans kapanışı (18:10 TSİ) öncesi bir önceki iş günü
+    if (now_ist.hour, now_ist.minute) < (18, 10):
+        d -= datetime.timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= datetime.timedelta(days=1)
+    return d
+
+
+def _normalize_ohlcv_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    OHLCV DataFrame'ini tz-naive İstanbul gün bazlı (normalize) standart biçime çevirir.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    if isinstance(out.columns, pd.MultiIndex):
+        out.columns = out.columns.get_level_values(0)
+    col_map = {c.lower(): c for c in out.columns}
+    for req in ["Open", "High", "Low", "Close", "Volume"]:
+        if req not in out.columns and req.lower() in col_map:
+            out[req] = out[col_map[req.lower()]]
+    if not all(c in out.columns for c in ["Open", "High", "Low", "Close"]):
+        return pd.DataFrame()
+    if "Volume" not in out.columns:
+        out["Volume"] = 0.0
+    out = out[["Open", "High", "Low", "Close", "Volume"]].copy()
+    out["Volume"] = out["Volume"].fillna(0.0)
+    out = out.dropna(subset=["Open", "High", "Low", "Close"])
+    if out.empty:
+        return pd.DataFrame()
+    idx = pd.to_datetime(out.index)
+    if idx.tz is not None:
+        try:
+            idx = idx.tz_convert("Europe/Istanbul").tz_localize(None)
+        except Exception:
+            idx = idx.tz_convert(_IST_TZ).tz_localize(None)
+    out.index = idx.normalize()
+    out = out[~out.index.duplicated(keep="last")].sort_index()
+    return out
+
+
+def _enrich_xu100(df_xu: pd.DataFrame, source: str) -> pd.DataFrame:
+    df_xu = df_xu.copy()
+    df_xu["EMA50"] = df_xu["Close"].ewm(span=50, adjust=False).mean()
+    df_xu["EMA200"] = df_xu["Close"].ewm(span=200, adjust=False).mean()
+    df_xu["RET60"] = df_xu["Close"].pct_change(60)
+    df_xu["RET120"] = df_xu["Close"].pct_change(120)
+    df_xu.attrs["data_source"] = source
+    return df_xu
 
 
 def get_xu100_df(force_refresh: bool = False, start: str = "2019-10-01") -> pd.DataFrame:
     """
-    BIST 100 (XU100.IS) endeks verisini çeker ve 15 dakika bellek içi önbellekte tutar.
+    BIST 100 (XU100) endeks verisini çeker ve 15 dakika bellek içi önbellekte tutar.
+    - Birincil kaynak: borsapy (TradingView resmi BIST kapanış verisi — 18:10 TSİ sonrası anında güncel).
+    - Yedek kaynak: Yahoo Finance (yfinance). İki kaynak arasında en güncel bar tarihi olan seçilir.
     """
     now = time.time()
     if (
@@ -32,24 +97,57 @@ def get_xu100_df(force_refresh: bool = False, start: str = "2019-10-01") -> pd.D
     ):
         return _XU100_CACHE["df"]
 
-    try:
-        import yfinance as yf
+    exp_date = expected_latest_bist_date()
+    df_bp = pd.DataFrame()
+    df_yf = pd.DataFrame()
 
-        df_xu = yf.download("XU100.IS", start=start, interval="1d", progress=False, auto_adjust=True)
-        if df_xu is None or df_xu.empty:
-            return pd.DataFrame()
-        if isinstance(df_xu.columns, pd.MultiIndex):
-            df_xu.columns = df_xu.columns.get_level_values(0)
-        df_xu = df_xu[["Open", "High", "Low", "Close", "Volume"]].dropna()
-        df_xu["EMA50"] = df_xu["Close"].ewm(span=50, adjust=False).mean()
-        df_xu["EMA200"] = df_xu["Close"].ewm(span=200, adjust=False).mean()
-        df_xu["RET60"] = df_xu["Close"].pct_change(60)
-        df_xu["RET120"] = df_xu["Close"].pct_change(120)
-        _XU100_CACHE["df"] = df_xu
+    # 1. Birincil Kaynak: borsapy (TradingView)
+    for _ in range(2):
+        try:
+            import borsapy as bp
+
+            raw_bp = bp.Index("XU100").history(start=start)
+            cand = _normalize_ohlcv_df(raw_bp)
+            if not cand.empty and len(cand) >= 60:
+                df_bp = cand
+                break
+        except Exception:
+            time.sleep(0.6)
+
+    bp_fresh = (not df_bp.empty) and (df_bp.index[-1].date() >= exp_date)
+
+    # 2. Yedek Kaynak: yfinance (yalnızca borsapy başarısızsa veya bar tarihi geride kaldıysa)
+    if not bp_fresh:
+        try:
+            import yfinance as yf
+
+            raw_yf = yf.download("XU100.IS", start=start, interval="1d", progress=False, auto_adjust=True)
+            cand_yf = _normalize_ohlcv_df(raw_yf)
+            if not cand_yf.empty and len(cand_yf) >= 60:
+                df_yf = cand_yf
+        except Exception:
+            pass
+
+    chosen = pd.DataFrame()
+    source = ""
+    if not df_bp.empty and not df_yf.empty:
+        if df_bp.index[-1] >= df_yf.index[-1]:
+            chosen, source = df_bp, "TradingView"
+        else:
+            chosen, source = df_yf, "Yahoo Finance"
+    elif not df_bp.empty:
+        chosen, source = df_bp, "TradingView"
+    elif not df_yf.empty:
+        chosen, source = df_yf, "Yahoo Finance"
+
+    if not chosen.empty:
+        enriched = _enrich_xu100(chosen, source)
+        _XU100_CACHE["df"] = enriched
         _XU100_CACHE["fetched_at"] = now
-        return df_xu
-    except Exception:
-        return _XU100_CACHE["df"] if _XU100_CACHE["df"] is not None else pd.DataFrame()
+        _XU100_CACHE["source"] = source
+        return enriched
+
+    return _XU100_CACHE["df"] if _XU100_CACHE["df"] is not None else pd.DataFrame()
 
 
 def calculate_net_volume(df: pd.DataFrame) -> pd.Series:

@@ -67,6 +67,7 @@ def format_bist30_daily_report(
     all_stocks_list: List[Dict[str, Any]] = None,
     xu_info: Optional[Dict[str, Any]] = None,
     last_closed_info: Optional[Dict[str, Any]] = None,
+    meta_info: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     V9.0 BIST 30 Süper Lider + Akıllı Çift Kalkan (XU100 & Hisse EMA50) günlük Telegram raporunu oluşturur.
@@ -76,10 +77,13 @@ def format_bist30_daily_report(
     open_positions = open_positions or []
     all_stocks_list = all_stocks_list or []
     xu_info = xu_info or {}
+    meta_info = meta_info or {}
 
     xu_close = float(xu_info.get("close", 0.0) or 0.0)
     xu_ema50 = float(xu_info.get("ema50", 0.0) or 0.0)
     xu_above50 = bool(xu_info.get("above_ema50", True))
+    xu_chg_pct = xu_info.get("daily_change_pct")
+    xu_chg_str = f" (<b>%{float(xu_chg_pct):+.2f}</b>)" if xu_chg_pct is not None else ""
     xu_diff_pct = ((xu_close - xu_ema50) / xu_ema50 * 100.0) if xu_ema50 > 0 else 0.0
 
     lines = [
@@ -93,13 +97,13 @@ def format_bist30_daily_report(
         if xu_above50:
             lines.append("🛡️ <b>ENDEKS REJİMİ (XU100):</b> 🟢 <b>POZİTİF (ALIM AÇIK)</b>")
             lines.append(
-                f"• XU100: <b>{xu_close:,.0f}</b> | EMA50: {xu_ema50:,.0f} (EMA50 Üstü: <b>%{xu_diff_pct:+.1f}</b>)"
+                f"• XU100: <b>{xu_close:,.2f}</b>{xu_chg_str} | EMA50: {xu_ema50:,.2f} (EMA50 Üstü: <b>%{xu_diff_pct:+.1f}</b>)"
             )
             lines.append("• <i>Kural: Süper Lider şartını sağlayanlarda yeni AL açık (Önerilen: 3–4 Lider × %25–%33).</i>")
         else:
             lines.append("🛡️ <b>ENDEKS REJİMİ (XU100):</b> 🔴 <b>NEGATİF (PPF KALKANI AKTİF)</b>")
             lines.append(
-                f"• XU100: <b>{xu_close:,.0f}</b> | EMA50: {xu_ema50:,.0f} (EMA50'ye Uzaklık: <b>%{xu_diff_pct:+.1f}</b>)"
+                f"• XU100: <b>{xu_close:,.2f}</b>{xu_chg_str} | EMA50: {xu_ema50:,.2f} (EMA50'ye Uzaklık: <b>%{xu_diff_pct:+.1f}</b>)"
             )
             lines.append("• <i>Kural: Endeks EMA50 üstüne çıkana kadar YENİ ALIM KAPALI. Açık hissede de EMA50 kırılırsa STOP ➔ PPF!</i>")
         lines.append("")
@@ -273,6 +277,20 @@ def format_bist30_daily_report(
         for rc in unique_risks:
             lines.append(f"• <b>#{rc}!</b> ➔ {get_stock_risk_note(rc)}")
 
+    # Alt bilgi: Veri kaynağı, taranan hisse sayısı ve İstanbul saati doğrulaması
+    if meta_info:
+        scanned_cnt = int(meta_info.get("scanned_count", len(all_stocks_list) or 0))
+        total_cnt = int(meta_info.get("total_count", max_positions or 30))
+        fresh_cnt = int(meta_info.get("fresh_count", scanned_cnt))
+        src_lbl = str(meta_info.get("data_source", "TradingView"))
+        run_ist = str(meta_info.get("run_time_ist", ""))
+        stale_warn = f" (⚠️ {scanned_cnt - fresh_cnt} eski bar)" if fresh_cnt < scanned_cnt else ""
+        time_part = f" | {run_ist}" if run_ist else ""
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append(
+            f"✅ <i>Tarama: {scanned_cnt}/{total_cnt} BIST 30{stale_warn} | Kaynak: {src_lbl}{time_part}</i>"
+        )
+
     return "\n".join(lines)
 
 
@@ -287,6 +305,7 @@ def send_bist30_daily_report(
     all_stocks_list: List[Dict[str, Any]] = None,
     xu_info: Optional[Dict[str, Any]] = None,
     last_closed_info: Optional[Dict[str, Any]] = None,
+    meta_info: Optional[Dict[str, Any]] = None,
 ) -> bool:
     msg = format_bist30_daily_report(
         date_str=date_str,
@@ -299,6 +318,7 @@ def send_bist30_daily_report(
         all_stocks_list=all_stocks_list,
         xu_info=xu_info,
         last_closed_info=last_closed_info,
+        meta_info=meta_info,
     )
     return send_telegram_message(msg)
 

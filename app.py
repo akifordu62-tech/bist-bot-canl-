@@ -513,6 +513,7 @@ elif app_mode == "🔍 BIST 30 Günlük Tarama":
             all_stocks_list=res_scan.get("all_stocks_list", []),
             xu_info=xu_s,
             last_closed_info=res_scan.get("last_closed_info"),
+            meta_info=res_scan.get("meta_info"),
         )
         with st.expander("📩 Telegram Mesaj Önizlemesi (V9.0)", expanded=True):
             st.markdown(preview_msg, unsafe_allow_html=True)

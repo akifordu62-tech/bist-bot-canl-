@@ -8,7 +8,9 @@ BIST 30 Günlük Tarama, Süper Lider + Akıllı Çift Kalkan (XU100 & Hisse EMA
 import os
 import sys
 import json
+import time
 import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -26,17 +28,28 @@ from config import (
     format_stock_entry_rule,
     get_stock_risk_note,
 )
-from strategy import run_strategy, recalibrate_and_save_stock, get_xu100_df
+from strategy import (
+    run_strategy,
+    recalibrate_and_save_stock,
+    get_xu100_df,
+    expected_latest_bist_date,
+    _normalize_ohlcv_df,
+)
 from bist_symbols import BIST_30_SYMBOLS, is_bist30
 from backtest import backtest_strategy
 from portfolio_manager import load_portfolio_state, save_portfolio_state
 from telegram_notifier import send_bist30_daily_report
 
 HISTORY_FILE = os.path.join(os.path.dirname(__file__), ".daily_sent_signals.json")
+_IST_TZ = datetime.timezone(datetime.timedelta(hours=3))
+
+
+def _ist_now() -> datetime.datetime:
+    return datetime.datetime.now(_IST_TZ)
 
 
 def _load_sent_history() -> dict:
-    today_str = datetime.date.today().isoformat()
+    today_str = _ist_now().date().isoformat()
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -56,6 +69,11 @@ def _save_sent_history(data: dict) -> None:
         pass
 
 
+def _is_bist_symbol(symbol: str) -> bool:
+    s = str(symbol or "").strip().upper()
+    return s.endswith(".IS") or ("." not in s and not s.startswith("^") and "=" not in s)
+
+
 def fetch_data(
     symbol: str,
     period: str = "max",
@@ -63,24 +81,68 @@ def fetch_data(
     start: str = None,
 ) -> pd.DataFrame:
     """
-    Yahoo Finance üzerinden hisse geçmiş verisini çeker ve temizler.
+    Hisse geçmiş verisini çeker ve temizler.
+    - BIST hisseleri için birincil kaynak: borsapy (TradingView resmi BIST verisi — 18:10 TSİ sonrası anında güncel).
+    - Yedek kaynak: Yahoo Finance (yfinance).
+    - İki kaynak arasında en güncel bar tarihine sahip veri seçilir.
     """
-    try:
-        if start:
-            df = yf.download(symbol, start=start, interval=interval, progress=False, auto_adjust=True)
-        else:
-            df = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
-        if df.empty or len(df) < 30:
-            return pd.DataFrame()
+    clean_sym = str(symbol or "").strip().upper()
+    is_bist = _is_bist_symbol(clean_sym) and interval == "1d"
+    bp_sym = clean_sym.replace(".IS", "")
+    yf_sym = f"{bp_sym}.IS" if (is_bist and not clean_sym.endswith(".IS")) else clean_sym
 
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+    exp_date = expected_latest_bist_date() if is_bist else None
+    df_bp = pd.DataFrame()
+    df_yf = pd.DataFrame()
 
-        df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-        return df
-    except Exception as e:
-        print(f"[{symbol} Veri Çekme Hatası]: {e}")
-        return pd.DataFrame()
+    # 1. Birincil Kaynak: borsapy (TradingView)
+    if is_bist:
+        for attempt in range(2):
+            try:
+                import borsapy as bp
+
+                if start:
+                    raw_bp = bp.Ticker(bp_sym).history(start=start, interval=interval)
+                else:
+                    bp_period = period if period in ("1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max") else "max"
+                    raw_bp = bp.Ticker(bp_sym).history(period=bp_period, interval=interval)
+                cand = _normalize_ohlcv_df(raw_bp)
+                if not cand.empty and len(cand) >= 30:
+                    df_bp = cand
+                    break
+            except Exception:
+                if attempt == 0:
+                    time.sleep(0.5)
+
+    bp_fresh = (not df_bp.empty) and (exp_date is None or df_bp.index[-1].date() >= exp_date)
+
+    # 2. Yedek Kaynak: yfinance (borsapy başarısızsa, BIST dışıysa veya bar tarihi geride kaldıysa)
+    if not bp_fresh:
+        try:
+            if start:
+                raw_yf = yf.download(yf_sym, start=start, interval=interval, progress=False, auto_adjust=True)
+            else:
+                raw_yf = yf.download(yf_sym, period=period, interval=interval, progress=False, auto_adjust=True)
+            cand_yf = _normalize_ohlcv_df(raw_yf)
+            if not cand_yf.empty and len(cand_yf) >= 30:
+                df_yf = cand_yf
+        except Exception as e:
+            if df_bp.empty:
+                print(f"[{symbol} Veri Çekme Hatası]: {e}")
+
+    if not df_bp.empty and not df_yf.empty:
+        if df_bp.index[-1] >= df_yf.index[-1]:
+            df_bp.attrs["data_source"] = "TradingView"
+            return df_bp
+        df_yf.attrs["data_source"] = "Yahoo Finance"
+        return df_yf
+    if not df_bp.empty:
+        df_bp.attrs["data_source"] = "TradingView"
+        return df_bp
+    if not df_yf.empty:
+        df_yf.attrs["data_source"] = "Yahoo Finance"
+        return df_yf
+    return pd.DataFrame()
 
 
 def scan_symbols(
@@ -102,52 +164,113 @@ def scan_symbols(
 
     config = StrategyConfig()
     state = load_portfolio_state()
+    prev_processed_date = str(state.get("last_processed_date") or "")
+    prev_telegram_sent_date = str(state.get("last_telegram_sent_date") or "")
 
     print("\n" + "=" * 82)
     print(f"  🔍 BIST 30 SÜPER LİDER + AKILLI ÇİFT KALKAN (V9.0) GÜNLÜK TARAMASI ({len(targets)} Hisse)")
     print("=" * 82)
 
-    print("  🛡️ XU100 (BIST 100 Endeks) verisi indiriliyor...")
+    print("  🛡️ XU100 (BIST 100 Endeks) verisi indiriliyor (TradingView / borsapy)...")
     xu_df = get_xu100_df(force_refresh=True, start="2019-10-01")
     xu_info = {
         "close": 0.0,
         "ema50": 0.0,
         "ema200": 0.0,
+        "daily_change_pct": None,
         "above_ema50": True,
         "date_iso": "",
+        "source": "",
     }
-    if xu_df is not None and not xu_df.empty:
-        xu_c = float(xu_df["Close"].iloc[-1])
-        xu_e50 = float(xu_df["EMA50"].iloc[-1])
-        xu_e200 = float(xu_df["EMA200"].iloc[-1])
-        xu_info = {
+
+    def _build_xu_info(df_x: pd.DataFrame) -> dict:
+        if df_x is None or df_x.empty:
+            return xu_info
+        xu_c = float(df_x["Close"].iloc[-1])
+        xu_e50 = float(df_x["EMA50"].iloc[-1])
+        xu_e200 = float(df_x["EMA200"].iloc[-1])
+        xu_chg = None
+        if len(df_x) >= 2:
+            prev_c = float(df_x["Close"].iloc[-2])
+            if prev_c > 0:
+                xu_chg = round((xu_c - prev_c) / prev_c * 100.0, 2)
+        return {
             "close": round(xu_c, 2),
             "ema50": round(xu_e50, 2),
             "ema200": round(xu_e200, 2),
+            "daily_change_pct": xu_chg,
             "above_ema50": bool(xu_c > xu_e50),
-            "date_iso": xu_df.index[-1].strftime("%Y-%m-%d"),
+            "date_iso": df_x.index[-1].strftime("%Y-%m-%d"),
+            "source": str(df_x.attrs.get("data_source", "TradingView")),
         }
+
+    if xu_df is not None and not xu_df.empty:
+        xu_info = _build_xu_info(xu_df)
         reg_lbl = "🟢 POZİTİF (ALIM AÇIK)" if xu_info["above_ema50"] else "🔴 NEGATİF (PPF KALKANI AKTİF)"
-        print(f"  🛡️ XU100: {xu_c:,.2f} | EMA50: {xu_e50:,.2f} ➔ {reg_lbl}")
+        chg_txt = f" (%{xu_info['daily_change_pct']:+.2f})" if xu_info["daily_change_pct"] is not None else ""
+        print(
+            f"  🛡️ XU100 ({xu_info['date_iso']} | {xu_info['source']}): "
+            f"{xu_info['close']:,.2f}{chg_txt} | EMA50: {xu_info['ema50']:,.2f} ➔ {reg_lbl}"
+        )
 
     raw_dfs = {}
     latest_bar_date = None
     total = len(targets)
+    done_cnt = 0
 
-    for idx, sym in enumerate(targets, 1):
-        print(f"\r[{idx}/{total}] İndiriliyor: {sym:<12}", end="", flush=True)
-        df = fetch_data(sym, start="2019-10-01")
-        if df.empty:
-            continue
-        raw_dfs[sym] = df
-        bar_date_iso = df.index[-1].strftime("%Y-%m-%d")
-        if latest_bar_date is None or bar_date_iso > latest_bar_date:
-            latest_bar_date = bar_date_iso
+    def _fetch_one(sym_name: str):
+        return sym_name, fetch_data(sym_name, start="2019-10-01")
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(_fetch_one, s): s for s in targets}
+        for fut in as_completed(futures):
+            sym, df = fut.result()
+            done_cnt += 1
+            print(f"\r[{done_cnt}/{total}] İndirildi: {sym:<12}", end="", flush=True)
+            if df is None or df.empty:
+                continue
+            raw_dfs[sym] = df
+            bar_date_iso = df.index[-1].strftime("%Y-%m-%d")
+            if latest_bar_date is None or bar_date_iso > latest_bar_date:
+                latest_bar_date = bar_date_iso
 
     print()
-    if not latest_bar_date:
-        print("[UYARI]: Hiçbir BIST 30 hissesi için güncel veri alınamadı.")
+
+    # Eksik kalan veya son tarihi geride kalan hisseleri tek sefer tekrar dene
+    if latest_bar_date:
+        retry_syms = [
+            s for s in targets
+            if (s not in raw_dfs) or (raw_dfs[s].index[-1].strftime("%Y-%m-%d") < latest_bar_date)
+        ]
+        if retry_syms:
+            print(f"  🔁 {len(retry_syms)} hisse için güncel bar tekrar deneniyor: {', '.join(s.replace('.IS', '') for s in retry_syms)}")
+            for sym in retry_syms:
+                time.sleep(0.4)
+                df_retry = fetch_data(sym, start="2019-10-01")
+                if df_retry is not None and not df_retry.empty:
+                    old_df = raw_dfs.get(sym)
+                    if old_df is None or df_retry.index[-1] >= old_df.index[-1]:
+                        raw_dfs[sym] = df_retry
+                        b_iso = df_retry.index[-1].strftime("%Y-%m-%d")
+                        if b_iso > latest_bar_date:
+                            latest_bar_date = b_iso
+
+        # XU100 tarihi hisselerin gerisinde kaldıysa tek sefer tazele
+        if xu_info["date_iso"] and xu_info["date_iso"] < latest_bar_date:
+            print("  🔁 XU100 bar tarihi hisselerin gerisinde, tekrar çekiliyor...")
+            xu_retry = get_xu100_df(force_refresh=True, start="2019-10-01")
+            if xu_retry is not None and not xu_retry.empty and xu_retry.index[-1].strftime("%Y-%m-%d") >= xu_info["date_iso"]:
+                xu_df = xu_retry
+                xu_info = _build_xu_info(xu_df)
+
+    min_required = min(25, total) if total >= 25 else max(1, total)
+    if (not latest_bar_date) or (len(raw_dfs) < min_required):
+        print(
+            f"[HATA]: Yeterli güncel BIST 30 verisi alınamadı ({len(raw_dfs)}/{total}). "
+            f"Eksik rapor gönderilmedi ve portföy durumu değiştirilmedi."
+        )
         return {
+            "scan_ok": False,
             "buy": [],
             "sell": [],
             "skipped": [],
@@ -156,7 +279,34 @@ def scan_symbols(
             "all_bist30": [],
             "xu_info": xu_info,
             "last_closed_info": None,
+            "meta_info": {
+                "scanned_count": len(raw_dfs),
+                "total_count": total,
+                "fresh_count": 0,
+                "data_source": xu_info.get("source") or "Bilinmiyor",
+                "run_time_ist": _ist_now().strftime("%H:%M TSİ"),
+            },
         }
+
+    # Kaynak ve tazelik özeti
+    sources_used = {str(df.attrs.get("data_source", "TradingView")) for df in raw_dfs.values()}
+    if xu_info.get("source"):
+        sources_used.add(xu_info["source"])
+    if sources_used == {"TradingView"}:
+        data_source_label = "TradingView (Resmi Kapanış)"
+    elif sources_used == {"Yahoo Finance"}:
+        data_source_label = "Yahoo Finance (Yedek)"
+    else:
+        data_source_label = "TradingView + YF Yedek"
+
+    fresh_count = sum(1 for df in raw_dfs.values() if df.index[-1].strftime("%Y-%m-%d") == latest_bar_date)
+    meta_info = {
+        "scanned_count": len(raw_dfs),
+        "total_count": total,
+        "fresh_count": fresh_count,
+        "data_source": data_source_label,
+        "run_time_ist": _ist_now().strftime("%H:%M TSİ"),
+    }
 
     # Aylık Otomatik Kalibrasyon Kontrolü
     current_month = latest_bar_date[:7]
@@ -475,7 +625,10 @@ def scan_symbols(
     if send_telegram:
         sent_history = _load_sent_history()
         report_key = f"BIST30_SUPERLEADER_V9_{latest_bar_date}"
-        if force_telegram or report_key not in sent_history.get("sent_reports", []):
+        already_sent_local = report_key in sent_history.get("sent_reports", [])
+        already_sent_state = bool(prev_telegram_sent_date and prev_telegram_sent_date == latest_bar_date)
+
+        if force_telegram or (not already_sent_local and not already_sent_state):
             ok = send_bist30_daily_report(
                 date_str=display_date,
                 bought_list=bought_today,
@@ -486,14 +639,23 @@ def scan_symbols(
                 all_stocks_list=all_stocks_list,
                 xu_info=xu_info,
                 last_closed_info=last_closed_info,
+                meta_info=meta_info,
             )
-            if ok and report_key not in sent_history.get("sent_reports", []):
-                sent_history.setdefault("sent_reports", []).append(report_key)
-                _save_sent_history(sent_history)
+            if ok:
+                if report_key not in sent_history.get("sent_reports", []):
+                    sent_history.setdefault("sent_reports", []).append(report_key)
+                    _save_sent_history(sent_history)
+                if update_portfolio:
+                    state["last_telegram_sent_date"] = latest_bar_date
+                    save_portfolio_state(state)
         else:
-            print("[Telegram Bilgi]: Bugünün V9.0 Süper Lider raporu zaten gönderilmiş, tekrar gönderilmedi.")
+            print(
+                f"[Telegram Bilgi]: {display_date} V9.0 raporu daha önce Telegram'a iletilmiş "
+                f"(last_telegram_sent_date={prev_telegram_sent_date or latest_bar_date}), mükerrer gönderim engellendi."
+            )
 
     return {
+        "scan_ok": True,
         "date": latest_bar_date,
         "display_date": display_date,
         "buy": bought_today,
@@ -503,6 +665,7 @@ def scan_symbols(
         "all_stocks_list": all_stocks_list,
         "xu_info": xu_info,
         "last_closed_info": last_closed_info,
+        "meta_info": meta_info,
         "all_bist30": [
             {
                 "Sıra": idx,
@@ -535,4 +698,13 @@ def scan_symbols(
 
 
 if __name__ == "__main__":
-    scan_symbols(BIST_30_SYMBOLS, send_telegram=True, save_charts=False)
+    force_flag = ("--force" in sys.argv) or (os.getenv("FORCE_TELEGRAM", "").strip().lower() in ("true", "1", "yes"))
+    no_tg = "--no-telegram" in sys.argv
+    res = scan_symbols(
+        BIST_30_SYMBOLS,
+        send_telegram=not no_tg,
+        save_charts=False,
+        force_telegram=force_flag,
+    )
+    if not res.get("scan_ok", True):
+        sys.exit(1)

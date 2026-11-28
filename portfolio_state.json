@@ -2,8 +2,9 @@
   "universe": "BIST30",
   "max_positions": 30,
   "allocation_pct": 25.0,
-  "updated_at": "2026-11-27 23:40",
-  "last_processed_date": "2026-11-26",
+  "updated_at": "2026-11-28 14:32 TSİ",
+  "last_processed_date": "2026-11-27",
+  "last_telegram_sent_date": "2026-11-27",
   "last_calibrated_month": "2026-11",
   "open_positions": [],
   "closed_history": [
@@ -25,24 +26,26 @@
     }
   ],
   "last_daily_actions": {
-    "date": "2026-11-26",
+    "date": "2026-11-27",
     "bought": [],
     "sold": [],
     "skipped": []
   },
   "xu_info": {
-    "close": 10743.1,
-    "ema50": 11902.71,
-    "ema200": 12744.12,
+    "close": 10977.01,
+    "ema50": 11866.41,
+    "ema200": 12727.39,
+    "daily_change_pct": 2.18,
     "above_ema50": false,
-    "date_iso": "2026-11-26"
+    "date_iso": "2026-11-27",
+    "source": "TradingView"
   },
   "last_closed_info": {
     "clean_symbol": "EREGL",
     "entry_date": "2026-05-20",
     "exit_date": "2026-08-07",
     "exit_date_disp": "07.08.2026",
-    "return_pct": 1.5,
+    "return_pct": 0.1,
     "exit_reason": "Çift EMA50 Stop"
   }
 }

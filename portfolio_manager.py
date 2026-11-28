@@ -22,6 +22,7 @@ def _default_state() -> Dict[str, Any]:
         "allocation_pct": float(PORTFOLIO_CONFIG.get("allocation_pct", 10.0)),
         "updated_at": datetime.date.today().isoformat(),
         "last_processed_date": "",
+        "last_telegram_sent_date": "",
         "last_calibrated_month": "",
         "open_positions": [],
         "closed_history": [],
@@ -50,7 +51,8 @@ def load_portfolio_state() -> Dict[str, Any]:
 
 
 def save_portfolio_state(state: Dict[str, Any]) -> None:
-    state["updated_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    ist_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=3)))
+    state["updated_at"] = ist_now.strftime("%Y-%m-%d %H:%M TSİ")
     if len(state.get("closed_history", [])) > 100:
         state["closed_history"] = state["closed_history"][-100:]
     with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
